@@ -2005,10 +2005,18 @@ export default function BoothSimulator() {
     const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     const ray = new THREE.Raycaster();
+    // Only pick when the pointer is actually over solid geometry — no fuzzy
+    // radius. (Default Line threshold is ~1m, which would let the selection
+    // outline be grabbed from far away.)
+    ray.params.Line.threshold = 0;
+    ray.params.Points.threshold = 0;
     ray.setFromCamera({ x, y }, camera);
     const hits = ray.intersectObjects(productsGroup.children, true);
     for (const h of hits) {
-      let o = h.object;
+      const obj = h.object;
+      // ignore the selection outline and any non-solid (line) helpers
+      if (!obj.isMesh || obj.name === '__outline') continue;
+      let o = obj;
       while (o) {
         if (o.userData && o.userData.instanceId) return o.userData.instanceId;
         o = o.parent;
@@ -2031,6 +2039,22 @@ export default function BoothSimulator() {
     ray.ray.intersectPlane(plane, point);
     return point;
   }, []);
+
+  // Keep a product's center inside the booth so it can never pass through a
+  // wall. Accounts for the product's own footprint (and its rotation).
+  const clampToBooth = (x, z, p) => {
+    const halfBoothW = (booth.width * MM_TO_M) / 2;
+    const halfBoothD = (booth.depth * MM_TO_M) / 2;
+    const flat = (p.rotation || 0) % 180 === 0;
+    const halfW = ((flat ? p.width : p.depth) * MM_TO_M) / 2;
+    const halfD = ((flat ? p.depth : p.width) * MM_TO_M) / 2;
+    const maxX = Math.max(0, halfBoothW - halfW);
+    const maxZ = Math.max(0, halfBoothD - halfD);
+    return {
+      x: Math.min(maxX, Math.max(-maxX, x)),
+      z: Math.min(maxZ, Math.max(-maxZ, z)),
+    };
+  };
 
   const onCanvasMouseDown = (e) => {
     if (e.button !== 0) return; // only left click for products
@@ -2063,8 +2087,15 @@ export default function BoothSimulator() {
     drag.moved = true;
     const floorPt = getFloorPoint(e);
     if (!floorPt) return;
-    const newX = floorPt.x + drag.offsetX;
-    const newZ = floorPt.z + drag.offsetZ;
+    const rawX = floorPt.x + drag.offsetX;
+    const rawZ = floorPt.z + drag.offsetZ;
+    // keep the product inside the booth walls
+    const prod = productsRef.current.find(
+      (p) => p.instanceId === drag.instanceId
+    );
+    const { x: newX, z: newZ } = prod
+      ? clampToBooth(rawX, rawZ, prod)
+      : { x: rawX, z: rawZ };
     // live mesh update for smoothness
     const mesh = meshMapRef.current.get(drag.instanceId);
     if (mesh) {
@@ -2362,6 +2393,41 @@ export default function BoothSimulator() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  // 방향키(←→↑↓)로 선택한 물품을 부스 안에서 이동. 한 번에 50mm,
+  // Shift 를 함께 누르면 200mm씩. 벽(부스 구역)은 넘어가지 않아요.
+  useEffect(() => {
+    if (!selectedId) return;
+    const STEP = 0.05; // m (50mm)
+    const onKeyDown = (e) => {
+      // 입력창에 타이핑 중이면 무시
+      const tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      let dx = 0,
+        dz = 0;
+      if (e.key === 'ArrowLeft') dx = -1;
+      else if (e.key === 'ArrowRight') dx = 1;
+      else if (e.key === 'ArrowUp') dz = -1;
+      else if (e.key === 'ArrowDown') dz = 1;
+      else return;
+      e.preventDefault();
+      const step = STEP * (e.shiftKey ? 4 : 1);
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.instanceId !== selectedId) return p;
+          const c = clampToBooth(
+            p.position.x + dx * step,
+            p.position.z + dz * step,
+            p
+          );
+          return { ...p, position: c };
+        })
+      );
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, booth.width, booth.depth]);
 
   /* ---------- presets ---------- */
   /* ---------- 벽 개별 세우기/없애기 (왼쪽·뒤쪽·오른쪽) ---------- */
