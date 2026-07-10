@@ -13,6 +13,23 @@ import { DEFAULT_CHECKLIST, type ChecklistPhase } from "@/lib/checklist";
 
 type EditForm = Omit<Exhibition, "id">;
 type Photo = { id: string; image: string; caption?: string };
+type ShipmentItem = { name: string; brand: string };
+type Shipment = { id: string; name: string; savedAt: string; items: ShipmentItem[] };
+
+const brandKo = (b: string) => (b === "HOMEDANT HOUSE" ? "홈던트하우스" : "스피드랙");
+
+// 전시품목의 선반들을 "이름·브랜드"별 개수로 묶기
+function aggregateShelves(items: ShipmentItem[]) {
+  const map = new Map<string, { name: string; brand: string; count: number }>();
+  for (const it of items) {
+    const brand = brandKo(it.brand);
+    const key = `${it.name}·${brand}`;
+    const cur = map.get(key);
+    if (cur) cur.count += 1;
+    else map.set(key, { name: it.name, brand, count: 1 });
+  }
+  return Array.from(map, ([key, v]) => ({ key, ...v }));
+}
 
 // 체크리스트 구조 불러오기 (수정본이 있으면 그것, 없으면 기본값)
 function loadStructure(): ChecklistPhase[] {
@@ -53,8 +70,15 @@ export default function Home() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [structure, setStructure] = useState<ChecklistPhase[]>([]);
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [shipment, setShipment] = useState<Shipment | null>(null);
 
   const [editForm, setEditForm] = useState<EditForm | null>(null);
+
+  // 전시품목(부스 시뮬레이터에서 저장, 하나만 유지). 전시회 선택과 무관한 전역 값.
+  useEffect(() => {
+    const list = readJSON<Shipment[]>("booth_shipments", []);
+    setShipment(Array.isArray(list) && list.length ? list[0] : null);
+  }, []);
 
   // 선택된 전시회의 자료를 읽어옵니다.
   useEffect(() => {
@@ -70,37 +94,22 @@ export default function Home() {
     setChecked(loadChecked(localStorage.getItem(`checklist:${selected.id}`)));
   }, [selected]);
 
-  // 요약 통계 계산
+  // 요약 통계 계산 (상담 건수 · 사진 수 · 체크리스트 진행도)
   const stats = useMemo(() => {
-    // 상담 실적
-    const grade = (arr: Consultation[], field: "importance" | "interestLevel") => ({
-      A: arr.filter((c) => c[field] === "A").length,
-      B: arr.filter((c) => c[field] === "B").length,
-      C: arr.filter((c) => c[field] === "C").length,
-    });
-    const interestTally = new Map<string, number>();
-    for (const c of consultations) {
-      for (const it of c.interests ?? []) interestTally.set(it, (interestTally.get(it) ?? 0) + 1);
+    let clTotal = 0;
+    let clDone = 0;
+    for (const p of structure) {
+      for (const g of p.groups) {
+        for (const it of g.items) {
+          clTotal += 1;
+          if (checked.has(it.id)) clDone += 1;
+        }
+      }
     }
-    const topInterests = [...interestTally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
-
-    // 체크리스트 진행도 (단계별)
-    const phases = structure.map((p) => {
-      const ids = p.groups.flatMap((g) => g.items.map((it) => it.id));
-      const done = ids.filter((id) => checked.has(id)).length;
-      return { key: p.key, label: p.label, emoji: p.emoji, total: ids.length, done };
-    });
-    const clTotal = phases.reduce((s, p) => s + p.total, 0);
-    const clDone = phases.reduce((s, p) => s + p.done, 0);
-
     return {
       total: consultations.length,
-      importance: grade(consultations, "importance"),
-      interest: grade(consultations, "interestLevel"),
-      topInterests,
-      keyClients: consultations.filter((c) => c.importance === "A"),
       photoCount: photos.length,
-      checklist: { total: clTotal, done: clDone, phases },
+      checklist: { total: clTotal, done: clDone },
     };
   }, [consultations, photos, structure, checked]);
 
@@ -169,7 +178,6 @@ export default function Home() {
             </span>
             {selected.headcount && <span>👥 {selected.headcount}</span>}
           </div>
-          {selected.memo && <div className="mt-1 text-sm text-zinc-400">📝 {selected.memo}</div>}
         </div>
         <button
           type="button"
@@ -180,107 +188,51 @@ export default function Home() {
         </button>
       </div>
 
-      {/* ── 요약 통계 타일 ── */}
-      <section className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {/* ── 핵심 지표: 상담 건수 · 체크리스트 ── */}
+      <section className="mt-6 grid grid-cols-2 gap-4">
         <StatTile label="상담 건수" value={stats.total} unit="건" accent="blue" href="/after/organize" />
-        <StatTile label="핵심 고객 (중요도 A)" value={stats.importance.A} unit="곳" accent="red" href="/after/dashboard" />
-        <StatTile label="현장 사진" value={stats.photoCount} unit="장" accent="teal" href="/during/photos" />
         <StatTile label="체크리스트" value={clPct} unit="%" accent="green" href="/before/checklist" />
       </section>
 
-      {/* ── 상세 카드 ── */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* 체크리스트 진행 */}
-        <Card title="✅ 준비 진행도" href="/before/checklist" cta="체크리스트 열기">
-          <div className="flex items-end justify-between">
-            <span className="text-sm text-zinc-500 dark:text-zinc-400">전체 진행률</span>
-            <span className="text-sm text-zinc-500 dark:text-zinc-400">
-              <b className="text-lg text-blue-600 dark:text-blue-400">{stats.checklist.done}</b> / {stats.checklist.total} · {clPct}%
-            </span>
-          </div>
-          <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
-            <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${clPct}%` }} />
-          </div>
-          <div className="mt-4 space-y-2.5">
-            {stats.checklist.phases.map((p) => {
-              const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
-              return (
-                <div key={p.key} className="flex items-center gap-3 text-sm">
-                  <span className="w-24 shrink-0 text-zinc-600 dark:text-zinc-300">
-                    {p.emoji} {p.label}
-                  </span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
-                    <div className="h-full rounded-full bg-blue-400" style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="w-12 shrink-0 text-right text-zinc-500 dark:text-zinc-400">
-                    {p.done}/{p.total}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        {/* 상담 실적 요약 */}
-        <Card title="📊 상담 실적" href="/after/dashboard" cta="실적 대시보드 열기">
-          {stats.total === 0 ? (
-            <EmptyHint text="아직 상담일지가 없어요." linkText="상담일지 작성하러 가기" href="/during/consultation" />
+      {/* ── 전시품목 목록 ── */}
+      <div className="mt-6">
+        <Card title="📦 전시품목 목록" href="/before/shipment" cta="전시품목 열기">
+          {!shipment || shipment.items.length === 0 ? (
+            <EmptyHint
+              text="아직 저장된 전시품목이 없어요."
+              linkText="부스 시뮬레이션에서 저장하기"
+              href="/before/booth"
+            />
           ) : (
             <>
-              <div className="flex flex-wrap gap-6">
-                <GradeMini title="중요도" g={stats.importance} />
-                <GradeMini title="관심도" g={stats.interest} />
+              <div className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
+                <b className="text-zinc-700 dark:text-zinc-200">{shipment.name}</b> · 선반 총{" "}
+                {shipment.items.length}개
               </div>
-              <div className="mt-4">
-                <div className="mb-1.5 text-sm text-zinc-500 dark:text-zinc-400">많이 언급된 관심품목</div>
-                {stats.topInterests.length === 0 ? (
-                  <span className="text-sm text-zinc-400">아직 없음</span>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {stats.topInterests.map(([label, n]) => (
-                      <span
-                        key={label}
-                        className="rounded-md bg-black/[0.05] px-2 py-1 text-xs text-zinc-600 dark:bg-white/[0.08] dark:text-zinc-300"
-                      >
-                        {label} <b className="text-zinc-500 dark:text-zinc-400">{n}</b>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <ul className="divide-y divide-black/[0.06] dark:divide-white/[0.06]">
+                {aggregateShelves(shipment.items).map((s) => (
+                  <li key={s.key} className="flex items-center gap-3 py-2 text-sm">
+                    <span className="flex-1 truncate font-medium">{s.name}</span>
+                    <span className="text-zinc-500 dark:text-zinc-400">{s.brand}</span>
+                    <span className="w-10 text-right font-semibold text-blue-600 dark:text-blue-400">
+                      ×{s.count}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </>
           )}
         </Card>
       </div>
 
-      {/* ── 핵심 고객 + 현장 사진 ── */}
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* 핵심 고객 */}
-        <Card title="⭐ 핵심 고객 (중요도 A)" href="/after/dashboard" cta="자세히">
-          {stats.keyClients.length === 0 ? (
-            <p className="py-4 text-sm text-zinc-500">아직 중요도 A로 표시한 업체가 없어요.</p>
-          ) : (
-            <ul className="divide-y divide-black/[0.06] dark:divide-white/[0.06]">
-              {stats.keyClients.slice(0, 5).map((c) => (
-                <li key={c.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                  <span className="font-medium">{c.company || "(회사명 미입력)"}</span>
-                  <span className="truncate text-zinc-500 dark:text-zinc-400">{c.name}</span>
-                </li>
-              ))}
-              {stats.keyClients.length > 5 && (
-                <li className="pt-2 text-xs text-zinc-400">외 {stats.keyClients.length - 5}곳</li>
-              )}
-            </ul>
-          )}
-        </Card>
-
-        {/* 현장 사진 */}
+      {/* ── 현장 사진 ── */}
+      <div className="mt-6">
         <Card title="📸 현장 사진" href="/during/photos" cta="사진 관리">
           {stats.photoCount === 0 ? (
             <EmptyHint text="아직 올린 현장 사진이 없어요." linkText="사진 올리러 가기" href="/during/photos" />
           ) : (
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
-              {photos.slice(0, 5).map((p) => (
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+              {photos.slice(0, 6).map((p) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={p.id}
@@ -289,9 +241,9 @@ export default function Home() {
                   className="aspect-square w-full rounded-lg object-cover"
                 />
               ))}
-              {stats.photoCount > 5 && (
+              {stats.photoCount > 6 && (
                 <div className="flex aspect-square items-center justify-center rounded-lg bg-black/[0.05] text-sm font-medium text-zinc-500 dark:bg-white/[0.08]">
-                  +{stats.photoCount - 5}
+                  +{stats.photoCount - 6}
                 </div>
               )}
             </div>
@@ -418,20 +370,6 @@ function Card({
       </div>
       {children}
     </section>
-  );
-}
-
-function GradeMini({ title, g }: { title: string; g: { A: number; B: number; C: number } }) {
-  const dot = (c: string) => <span className={"inline-block h-2.5 w-2.5 rounded-full " + c} />;
-  return (
-    <div>
-      <div className="mb-1.5 text-sm text-zinc-500 dark:text-zinc-400">{title}</div>
-      <div className="flex items-center gap-3 text-sm">
-        <span className="flex items-center gap-1.5">{dot("bg-red-500")} A {g.A}</span>
-        <span className="flex items-center gap-1.5">{dot("bg-amber-500")} B {g.B}</span>
-        <span className="flex items-center gap-1.5">{dot("bg-blue-500")} C {g.C}</span>
-      </div>
-    </div>
   );
 }
 

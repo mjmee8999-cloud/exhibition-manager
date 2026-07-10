@@ -2153,8 +2153,6 @@ export default function BoothSimulator() {
   const saveShipment = (d) => {
     try {
       const KEY = 'booth_shipments';
-      const raw = window.localStorage.getItem(KEY);
-      const list = raw ? JSON.parse(raw) : [];
       const shipment = {
         id: `sh_${Date.now()}`,
         name: d.name,
@@ -2173,7 +2171,8 @@ export default function BoothSimulator() {
           boardColor: p.boardColor,
         })),
       };
-      window.localStorage.setItem(KEY, JSON.stringify([shipment, ...list]));
+      // 전시품목은 하나만 유지 (기존 것을 덮어씀)
+      window.localStorage.setItem(KEY, JSON.stringify([shipment]));
       // 전시품목 페이지로 이동 (iframe 안이면 상위 창을 이동)
       const target = '/before/shipment';
       if (window.top && window.top !== window.self) {
