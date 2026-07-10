@@ -2719,9 +2719,9 @@ export default function BoothSimulator() {
             style={{ backgroundColor: 'rgba(255,255,255,0.92)' }}
             className="absolute bottom-3 left-3 backdrop-blur border border-gray-200 rounded px-3 py-1.5 text-xs text-gray-600 pointer-events-none"
           >
-            <span className="font-medium">좌드래그</span> 회전 ·{' '}
-            <span className="font-medium">우드래그</span> 이동 ·{' '}
+            <span className="font-medium">우드래그</span> 회전 ·{' '}
             <span className="font-medium">휠</span> 확대·축소 ·{' '}
+            <span className="font-medium">좌드래그 / 방향키</span> 물건 이동 ·{' '}
             <span className="font-medium">클릭</span> 선택
           </div>
           {/* brief "Saved ✓" confirmation (Ctrl+S or 디자인 저장) */}
@@ -3473,7 +3473,7 @@ function createOrbitControls(camera, dom) {
   const spherical = new THREE.Spherical();
   const offset = camera.position.clone().sub(target);
   spherical.setFromVector3(offset);
-  let mode = null; // 'rotate' | 'pan'
+  let mode = null; // 'rotate' (우드래그) — 좌드래그는 물건 이동 전용
   let lastX = 0,
     lastY = 0;
   const ctrl = {
@@ -3483,9 +3483,8 @@ function createOrbitControls(camera, dom) {
     maxDistance: 80,
     minPolarAngle: 0.05,
     maxPolarAngle: Math.PI / 2 - 0.02,
-    // 마우스 감도 (낮을수록 둔함). 회전/이동이 너무 예민하지 않도록 낮춤.
+    // 마우스 감도 (낮을수록 둔함). 회전이 너무 예민하지 않도록 낮춤.
     rotateSpeed: 0.4,
-    panSpeed: 0.55,
     update() {
       const off = new THREE.Vector3().setFromSpherical(spherical);
       camera.position.copy(target).add(off);
@@ -3513,8 +3512,8 @@ function createOrbitControls(camera, dom) {
 
   function onDown(e) {
     if (!ctrl.enabled) return;
-    if (e.button === 0) mode = 'rotate';
-    else if (e.button === 2) mode = 'pan';
+    // 우드래그(오른쪽 버튼)만 화면 회전. 좌드래그는 물건 이동 전용이라 무시.
+    if (e.button === 2) mode = 'rotate';
     else return;
     lastX = e.clientX;
     lastY = e.clientY;
@@ -3522,33 +3521,18 @@ function createOrbitControls(camera, dom) {
     window.addEventListener('mouseup', onUp);
   }
   function onMove(e) {
-    if (!ctrl.enabled || !mode) return;
+    if (!ctrl.enabled || mode !== 'rotate') return;
     const dx = e.clientX - lastX,
       dy = e.clientY - lastY;
     lastX = e.clientX;
     lastY = e.clientY;
-    if (mode === 'rotate') {
-      const rect = dom.getBoundingClientRect();
-      spherical.theta -= (dx / rect.width) * Math.PI * 2 * ctrl.rotateSpeed;
-      spherical.phi -= (dy / rect.height) * Math.PI * ctrl.rotateSpeed;
-      spherical.phi = Math.max(
-        ctrl.minPolarAngle,
-        Math.min(ctrl.maxPolarAngle, spherical.phi)
-      );
-    } else {
-      const factor = spherical.radius * 0.0018 * ctrl.panSpeed;
-      const right = new THREE.Vector3(
-        Math.cos(spherical.theta),
-        0,
-        -Math.sin(spherical.theta)
-      ).multiplyScalar(-dx * factor);
-      const fwd = new THREE.Vector3(
-        Math.sin(spherical.theta),
-        0,
-        Math.cos(spherical.theta)
-      ).multiplyScalar(dy * factor);
-      target.add(right).add(fwd);
-    }
+    const rect = dom.getBoundingClientRect();
+    spherical.theta -= (dx / rect.width) * Math.PI * 2 * ctrl.rotateSpeed;
+    spherical.phi -= (dy / rect.height) * Math.PI * ctrl.rotateSpeed;
+    spherical.phi = Math.max(
+      ctrl.minPolarAngle,
+      Math.min(ctrl.maxPolarAngle, spherical.phi)
+    );
     ctrl.update();
   }
   function onUp() {
