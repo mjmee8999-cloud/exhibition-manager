@@ -2028,14 +2028,17 @@ export default function BoothSimulator() {
     const flat = (p.rotation || 0) % 180 === 0;
     const halfW = ((flat ? p.width : p.depth) * MM_TO_M) / 2;
     const halfD = ((flat ? p.depth : p.width) * MM_TO_M) / 2;
+    // 벽은 경계선에 중심을 두고 두께 0.05m로 서 있으므로, 벽 안쪽 면
+    // (경계선에서 0.025m 안쪽)까지만 오도록 벽 두께의 절반을 빼준다.
+    const wallHalf = 0.025;
     const maxX = Math.max(0, halfBoothW - halfW);
     const maxZ = Math.max(0, halfBoothD - halfD);
     const walls = booth.walls || { left: true, back: true, right: true };
     let cx = x;
     let cz = z;
-    if (walls.left && cx < -maxX) cx = -maxX; // 왼쪽 벽
-    if (walls.right && cx > maxX) cx = maxX; // 오른쪽 벽
-    if (walls.back && cz < -maxZ) cz = -maxZ; // 뒤쪽 벽
+    if (walls.left && cx < -maxX + wallHalf) cx = -maxX + wallHalf; // 왼쪽 벽
+    if (walls.right && cx > maxX - wallHalf) cx = maxX - wallHalf; // 오른쪽 벽
+    if (walls.back && cz < -maxZ + wallHalf) cz = -maxZ + wallHalf; // 뒤쪽 벽
     return { x: cx, z: cz };
   };
 
