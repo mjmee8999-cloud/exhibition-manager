@@ -21,12 +21,6 @@ import {
 /* ============================================================
    SIZE OPTIONS  ── per spec sheet
    ============================================================ */
-const ADDON_KO = {
-  'additional shelf': '선반 추가', 'hanger bar': '행거 봉', 'caster': '바퀴(캐스터)',
-  'pegboard': '타공판', 'side panel': '측면 판넬', 'handle': '손잡이',
-  'drawer': '서랍', 'curtain': '커튼', 'cabinet': '캐비닛',
-};
-
 const SPEEDRACK_SIZES = {
   width: [300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1500],
   depth: [300, 400, 500, 600, 800, 900],
@@ -71,21 +65,6 @@ const PRODUCT_LIBRARY = [
       'pegboard',
       'side panel',
     ],
-  },
-
-  {
-    id: 'sp_heavy',
-    brand: 'SPEEDRACK',
-    category: 'Heavy Duty Shelf',
-    name: '중량 선반',
-    type: 'heavy',
-    defaultSize: { width: 1200, depth: 600, height: 1800 },
-    sizeOptions: SPEEDRACK_SIZES,
-    tierOptions: [3, 4, 5],
-    defaultTier: 5,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: ['additional shelf', 'side panel'],
   },
 
   {
@@ -2151,7 +2130,8 @@ export default function BoothSimulator() {
         width: tpl.defaultSize.width,
         depth: tpl.defaultSize.depth,
         height: tpl.defaultSize.height,
-        tier: tpl.defaultTier,
+        // 기본값을 그 선반이 지원하는 가장 높은 단수로 (예: 스탠다드 선반 → 5단)
+        tier: Math.max(...tpl.tierOptions),
         frameColor: tpl.frameColors[0],
         boardColor: tpl.boardColors[0],
         position: { x: placeX, z: placeZ },
@@ -2204,20 +2184,6 @@ export default function BoothSimulator() {
       )
     );
   }, [selectedId]);
-
-  /* ---------- save / load / export ---------- */
-  const savePNG = () => {
-    const renderer = rendererRef.current;
-    const scene = sceneRef.current;
-    const camera = cameraRef.current;
-    if (!renderer || !scene || !camera) return;
-    renderer.render(scene, camera);
-    const url = renderer.domElement.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${layoutName || 'booth'}_${Date.now()}.png`;
-    a.click();
-  };
 
   /* ---------- Export Booth Images: front / top / 45° ---------- */
   const exportBoothImages = () => {
@@ -2561,9 +2527,6 @@ export default function BoothSimulator() {
               <Eye className="w-3.5 h-3.5" /> 정면
             </ViewBtn>
             <div className="w-px h-5 bg-gray-300 mx-1" />
-            <IconBtn onClick={savePNG} title="현재 화면을 PNG로 저장">
-              <Camera className="w-3.5 h-3.5" /> PNG
-            </IconBtn>
             <IconBtn
               onClick={exportBoothImages}
               title="정면 / 윗면 / 45° 뷰를 PNG 3장으로 내보내기"
@@ -3084,35 +3047,6 @@ function PropertyPanel({
           </div>
         </Field>
       </Section>
-
-      {/* add-ons */}
-      {tpl.addOns.length > 0 && (
-        <Section title="추가 옵션">
-          <div className="grid grid-cols-2 gap-1">
-            {tpl.addOns.map((a) => {
-              const active = (product.addOns || []).includes(a);
-              return (
-                <button
-                  key={a}
-                  onClick={() => {
-                    const cur = product.addOns || [];
-                    update({
-                      addOns: active ? cur.filter((x) => x !== a) : [...cur, a],
-                    });
-                  }}
-                  className={`text-xs py-1 px-1.5 rounded border transition truncate ${
-                    active
-                      ? 'border-red-500 bg-red-50 text-red-700'
-                      : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  {ADDON_KO[a] || a}
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-      )}
 
       {/* size summary */}
       <Section title="요약">
