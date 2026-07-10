@@ -21,148 +21,80 @@ import {
 /* ============================================================
    SIZE OPTIONS  ── per spec sheet
    ============================================================ */
-const SPEEDRACK_SIZES = {
-  width: [300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1500],
-  depth: [300, 400, 500, 600, 800, 900],
-  height: [
-    330, 420, 600, 750, 900, 1200, 1350, 1500, 1650, 1800, 1950, 2100, 2400,
-  ],
-};
-
 const HOMEDANT_HOUSE_SIZES = {
   width: [300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200],
   depth: [300, 400, 500, 600, 700],
   height: [600, 750, 900, 1050, 1200, 1350, 1500, 1650, 1800, 1950, 2100],
 };
 
-const EXHIBITION_SIZES = {
-  width: [300, 400, 500, 600, 800, 1000, 1200, 1500, 1800, 2000],
-  depth: [50, 300, 400, 500, 600, 800, 1000],
-  height: [400, 500, 750, 900, 1100, 1500, 1800, 2000, 2200],
-};
-
 /* ============================================================
    PRODUCT LIBRARY
    ============================================================ */
+// 선반 5종. 홈던트하우스 양식을 기준으로 정의하고, 브랜드(스피드랙/홈던트하우스)는
+// 각 물품마다 속성 패널에서 선택한다. 스피드랙은 프레임 기둥에 타공(구멍)이 있는
+// 것만 차이. (brand 는 새 물품의 기본 브랜드 = 스피드랙)
 const PRODUCT_LIBRARY = [
-  // === SPEEDRACK / HOMEDANT ===
   {
-    id: 'sp_shelf',
+    id: 'shelf_basic',
     brand: 'SPEEDRACK',
     category: 'Shelf',
-    name: '스탠다드 선반',
+    name: '일반 선반',
     type: 'shelf',
     defaultSize: { width: 900, depth: 400, height: 1800 },
-    sizeOptions: SPEEDRACK_SIZES,
-    tierOptions: [2, 3, 4, 5],
-    defaultTier: 2,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: [
-      'additional shelf',
-      'hanger bar',
-      'caster',
-      'pegboard',
-      'side panel',
-    ],
-  },
-
-  {
-    id: 'sp_washer',
-    brand: 'SPEEDRACK',
-    category: 'Washing Machine Shelf',
-    name: '세탁·건조기 선반',
-    type: 'frame_open',
-    defaultSize: { width: 700, depth: 600, height: 1800 },
-    sizeOptions: SPEEDRACK_SIZES,
-    tierOptions: [1, 2, 3],
-    defaultTier: 2,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: ['additional shelf', 'hanger bar'],
-  },
-
-  {
-    id: 'sp_slim',
-    brand: 'SPEEDRACK',
-    category: 'Slim Shelf',
-    name: '슬림 선반',
-    type: 'shelf',
-    defaultSize: { width: 300, depth: 300, height: 1800 },
-    sizeOptions: SPEEDRACK_SIZES,
+    sizeOptions: HOMEDANT_HOUSE_SIZES,
     tierOptions: [2, 3, 4, 5],
     defaultTier: 5,
     frameColors: ['black', 'white'],
     boardColors: ['wood', 'white'],
-    addOns: ['additional shelf'],
+    addOns: [],
   },
-
   {
-    id: 'sp_open',
-    brand: 'SPEEDRACK',
-    category: 'Open Base Shelf',
-    name: '하단오픈 선반',
-    type: 'open_base',
-    defaultSize: { width: 900, depth: 400, height: 1800 },
-    sizeOptions: SPEEDRACK_SIZES,
-    tierOptions: [3, 4, 5],
-    defaultTier: 4,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: ['additional shelf', 'hanger bar'],
-  },
-
-  {
-    id: 'sp_garment',
-    brand: 'SPEEDRACK',
-    category: 'Garment Rack',
-    name: '행거',
-    type: 'garment',
-    defaultSize: { width: 900, depth: 500, height: 1800 },
-    sizeOptions: SPEEDRACK_SIZES,
-    tierOptions: [1, 2, 3],
-    defaultTier: 2,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: ['additional shelf', 'hanger bar'],
-  },
-
-  {
-    id: 'sp_rolling',
+    id: 'shelf_rolling',
     brand: 'SPEEDRACK',
     category: 'Rolling Shelf',
     name: '바퀴 선반',
     type: 'rolling',
     defaultSize: { width: 600, depth: 400, height: 900 },
-    sizeOptions: SPEEDRACK_SIZES,
-    tierOptions: [2, 3, 4, 5],
-    defaultTier: 3,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: ['additional shelf', 'handle'],
-  },
-
-  // === HOMEDANT HOUSE ===
-  {
-    id: 'hh_shelf',
-    brand: 'HOMEDANT HOUSE',
-    category: 'Shelf',
-    name: '홈던트 선반',
-    type: 'shelf',
-    defaultSize: { width: 900, depth: 400, height: 1800 },
     sizeOptions: HOMEDANT_HOUSE_SIZES,
     tierOptions: [2, 3, 4, 5],
-    defaultTier: 2,
+    defaultTier: 4,
     frameColors: ['black', 'white'],
     boardColors: ['wood', 'white'],
-    addOns: ['drawer', 'hanger bar', 'curtain', 'pegboard'],
+    addOns: [],
   },
-
   {
-    id: 'hh_garment',
-    brand: 'HOMEDANT HOUSE',
+    id: 'shelf_pegboard',
+    brand: 'SPEEDRACK',
+    category: 'Pegboard Shelf',
+    name: '타공 선반',
+    type: 'pegboard',
+    defaultSize: { width: 600, depth: 400, height: 1800 },
+    sizeOptions: HOMEDANT_HOUSE_SIZES,
+    tierOptions: [3, 4, 5],
+    defaultTier: 5,
+    frameColors: ['black', 'white'],
+    boardColors: ['wood', 'white'],
+    addOns: [],
+  },
+  {
+    id: 'shelf_open',
+    brand: 'SPEEDRACK',
+    category: 'Open Base Shelf',
+    name: '하단오픈 선반',
+    type: 'open_base',
+    defaultSize: { width: 900, depth: 400, height: 1800 },
+    sizeOptions: HOMEDANT_HOUSE_SIZES,
+    tierOptions: [3, 4, 5],
+    defaultTier: 5,
+    frameColors: ['black', 'white'],
+    boardColors: ['wood', 'white'],
+    addOns: [],
+  },
+  {
+    id: 'shelf_garment',
+    brand: 'SPEEDRACK',
     category: 'Garment Rack',
-    name: '홈던트 행거',
+    name: '행거 선반',
     type: 'garment',
     defaultSize: { width: 900, depth: 500, height: 1800 },
     sizeOptions: HOMEDANT_HOUSE_SIZES,
@@ -170,202 +102,6 @@ const PRODUCT_LIBRARY = [
     defaultTier: 2,
     frameColors: ['black', 'white'],
     boardColors: ['wood', 'white'],
-    addOns: ['hanger bar', 'curtain'],
-  },
-
-  {
-    id: 'hh_slim',
-    brand: 'HOMEDANT HOUSE',
-    category: 'Slim Shelf',
-    name: '홈던트 슬림 선반',
-    type: 'shelf',
-    defaultSize: { width: 300, depth: 300, height: 1800 },
-    sizeOptions: HOMEDANT_HOUSE_SIZES,
-    tierOptions: [2, 3, 4, 5],
-    defaultTier: 4,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: [],
-  },
-
-  {
-    id: 'hh_open',
-    brand: 'HOMEDANT HOUSE',
-    category: 'Open Base Shelf',
-    name: '홈던트 하단오픈 선반',
-    type: 'open_base',
-    defaultSize: { width: 900, depth: 400, height: 1800 },
-    sizeOptions: HOMEDANT_HOUSE_SIZES,
-    tierOptions: [3, 4],
-    defaultTier: 4,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: ['hanger bar'],
-  },
-
-  {
-    id: 'hh_drawer',
-    brand: 'HOMEDANT HOUSE',
-    category: 'Drawer Shelf',
-    name: '홈던트 서랍 선반',
-    type: 'drawer',
-    defaultSize: { width: 600, depth: 400, height: 1200 },
-    sizeOptions: HOMEDANT_HOUSE_SIZES,
-    tierOptions: [3],
-    defaultTier: 3,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: ['drawer'],
-  },
-
-  {
-    id: 'hh_cabinet',
-    brand: 'HOMEDANT HOUSE',
-    category: 'Cabinet Shelf',
-    name: '홈던트 캐비닛 선반',
-    type: 'cabinet',
-    defaultSize: { width: 900, depth: 400, height: 1800 },
-    sizeOptions: HOMEDANT_HOUSE_SIZES,
-    tierOptions: [3, 4],
-    defaultTier: 4,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: ['cabinet', 'drawer'],
-  },
-
-  {
-    id: 'hh_rolling',
-    brand: 'HOMEDANT HOUSE',
-    category: 'Rolling Shelf',
-    name: '홈던트 바퀴 선반',
-    type: 'rolling',
-    defaultSize: { width: 600, depth: 400, height: 900 },
-    sizeOptions: HOMEDANT_HOUSE_SIZES,
-    tierOptions: [2, 3, 4, 5],
-    defaultTier: 3,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: [],
-  },
-
-  {
-    id: 'hh_pegboard',
-    brand: 'HOMEDANT HOUSE',
-    category: 'Pegboard Shelf',
-    name: '홈던트 타공 선반',
-    type: 'pegboard',
-    defaultSize: { width: 600, depth: 400, height: 1800 },
-    sizeOptions: HOMEDANT_HOUSE_SIZES,
-    tierOptions: [3, 4, 5],
-    defaultTier: 4,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: [],
-  },
-
-  // === EXHIBITION ITEMS ===
-  {
-    id: 'ex_banner',
-    brand: 'Exhibition',
-    category: 'Banner Stand',
-    name: '배너 거치대',
-    type: 'banner',
-    defaultSize: { width: 800, depth: 400, height: 2000 },
-    sizeOptions: EXHIBITION_SIZES,
-    tierOptions: [1],
-    defaultTier: 1,
-    frameColors: ['black', 'white'],
-    boardColors: ['white'],
-    addOns: [],
-  },
-
-  {
-    id: 'ex_poster',
-    brand: 'Exhibition',
-    category: 'Poster Panel',
-    name: '포스터 패널',
-    type: 'poster',
-    defaultSize: { width: 1000, depth: 50, height: 1800 },
-    sizeOptions: EXHIBITION_SIZES,
-    tierOptions: [1],
-    defaultTier: 1,
-    frameColors: ['black', 'white'],
-    boardColors: ['white'],
-    addOns: [],
-  },
-
-  {
-    id: 'ex_table',
-    brand: 'Exhibition',
-    category: 'Counseling Table',
-    name: '상담 테이블',
-    type: 'table',
-    defaultSize: { width: 1500, depth: 800, height: 750 },
-    sizeOptions: EXHIBITION_SIZES,
-    tierOptions: [1],
-    defaultTier: 1,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: [],
-  },
-
-  {
-    id: 'ex_chair',
-    brand: 'Exhibition',
-    category: 'Chair',
-    name: '의자',
-    type: 'chair',
-    defaultSize: { width: 500, depth: 500, height: 900 },
-    sizeOptions: EXHIBITION_SIZES,
-    tierOptions: [1],
-    defaultTier: 1,
-    frameColors: ['black', 'white'],
-    boardColors: ['black', 'white'],
-    addOns: [],
-  },
-
-  {
-    id: 'ex_catalog',
-    brand: 'Exhibition',
-    category: 'Catalog Stand',
-    name: '카탈로그 거치대',
-    type: 'catalog',
-    defaultSize: { width: 400, depth: 400, height: 1500 },
-    sizeOptions: EXHIBITION_SIZES,
-    tierOptions: [1],
-    defaultTier: 1,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: [],
-  },
-
-  {
-    id: 'ex_sample',
-    brand: 'Exhibition',
-    category: 'Sample Display Table',
-    name: '샘플 진열대',
-    type: 'table',
-    defaultSize: { width: 1200, depth: 600, height: 900 },
-    sizeOptions: EXHIBITION_SIZES,
-    tierOptions: [1],
-    defaultTier: 1,
-    frameColors: ['black', 'white'],
-    boardColors: ['wood', 'white'],
-    addOns: [],
-  },
-
-  {
-    id: 'ex_tv',
-    brand: 'Exhibition',
-    category: 'TV Stand',
-    name: 'TV 거치대',
-    type: 'tv',
-    defaultSize: { width: 1500, depth: 500, height: 2000 },
-    sizeOptions: EXHIBITION_SIZES,
-    tierOptions: [1],
-    defaultTier: 1,
-    frameColors: ['black', 'white'],
-    boardColors: ['black'],
     addOns: [],
   },
 ];
@@ -1007,7 +743,7 @@ function buildShelf(group, p, tpl) {
   const w = p.width * MM_TO_M,
     d = p.depth * MM_TO_M,
     h = p.height * MM_TO_M;
-  const perforated = tpl.brand === 'SPEEDRACK';
+  const perforated = (p.brand || tpl.brand) === 'SPEEDRACK';
   const mats = makeMaterials(p, { perforated });
   addPosts(group, w, d, h, mats.frame, 0.025, { postMat: mats.postMat });
   const skipBottom = tpl.type === 'open_base';
@@ -1022,7 +758,7 @@ function buildGarmentRack(group, p, tpl) {
   const w = p.width * MM_TO_M,
     d = p.depth * MM_TO_M,
     h = p.height * MM_TO_M;
-  const perforated = tpl.brand === 'SPEEDRACK';
+  const perforated = (p.brand || tpl.brand) === 'SPEEDRACK';
   const mats = makeMaterials(p, { perforated });
   addPosts(group, w, d, h, mats.frame, 0.025, { postMat: mats.postMat });
   // tier boards (1-2 typically)
@@ -1052,7 +788,7 @@ function buildRolling(group, p, tpl) {
     d = p.depth * MM_TO_M,
     h = p.height * MM_TO_M;
   const wheelR = 0.04;
-  const perforated = tpl.brand === 'SPEEDRACK';
+  const perforated = (p.brand || tpl.brand) === 'SPEEDRACK';
   const mats = makeMaterials(p, { perforated });
   // shift everything up by wheelR*2
   const inner = new THREE.Group();
@@ -1123,7 +859,7 @@ function buildPegboard(group, p, tpl) {
   const w = p.width * MM_TO_M,
     d = p.depth * MM_TO_M,
     h = p.height * MM_TO_M;
-  const perforated = tpl.brand === 'SPEEDRACK';
+  const perforated = (p.brand || tpl.brand) === 'SPEEDRACK';
   const mats = makeMaterials(p, { perforated });
   addPosts(group, w, d, h, mats.frame, 0.025, { postMat: mats.postMat });
   addTierBoards(group, w, d, h, p.tier || tpl.defaultTier, mats.board, {
@@ -1172,7 +908,7 @@ function buildDrawer(group, p, tpl) {
   const w = p.width * MM_TO_M,
     d = p.depth * MM_TO_M,
     h = p.height * MM_TO_M;
-  const perforated = tpl.brand === 'SPEEDRACK';
+  const perforated = (p.brand || tpl.brand) === 'SPEEDRACK';
   const mats = makeMaterials(p, { perforated });
   addPosts(group, w, d, h, mats.frame, 0.025, { postMat: mats.postMat });
   // Drawer shelf has NO middle/bottom boards — only ONE board at the very
@@ -1259,7 +995,7 @@ function buildCabinet(group, p, tpl) {
   const w = p.width * MM_TO_M,
     d = p.depth * MM_TO_M,
     h = p.height * MM_TO_M;
-  const perforated = tpl.brand === 'SPEEDRACK';
+  const perforated = (p.brand || tpl.brand) === 'SPEEDRACK';
   const mats = makeMaterials(p, { perforated });
   addPosts(group, w, d, h, mats.frame, 0.025, { postMat: mats.postMat });
 
@@ -1354,7 +1090,7 @@ function buildFrameOpen(group, p, tpl) {
   const w = p.width * MM_TO_M,
     d = p.depth * MM_TO_M,
     h = p.height * MM_TO_M;
-  const perforated = tpl.brand === 'SPEEDRACK';
+  const perforated = (p.brand || tpl.brand) === 'SPEEDRACK';
   const mats = makeMaterials(p, { perforated });
   addPosts(group, w, d, h, mats.frame, 0.025, { postMat: mats.postMat });
   // top board only + maybe a middle/lower shelf, all with 4-side support beams
@@ -1376,7 +1112,7 @@ function buildHeavy(group, p, tpl) {
   const w = p.width * MM_TO_M,
     d = p.depth * MM_TO_M,
     h = p.height * MM_TO_M;
-  const perforated = tpl.brand === 'SPEEDRACK';
+  const perforated = (p.brand || tpl.brand) === 'SPEEDRACK';
   const mats = makeMaterials(p, { perforated });
   addPosts(group, w, d, h, mats.frame, 0.04, { postMat: mats.postMat });
   addTierBoards(group, w, d, h, p.tier || tpl.defaultTier, mats.board, {
@@ -1633,7 +1369,6 @@ export default function BoothSimulator() {
   });
   const [products, setProducts] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
-  const [activeBrand, setActiveBrand] = useState('SPEEDRACK');
   const [viewMode, setViewMode] = useState('3d');
   const [warnings, setWarnings] = useState({}); // instanceId -> reason
   // current 배치 이름 (used in exported PNG filenames)
@@ -1869,7 +1604,7 @@ export default function BoothSimulator() {
       const tpl = PRODUCT_LIBRARY.find((t) => t.id === p.productId);
       if (!tpl) return;
       let mesh = map.get(p.instanceId);
-      const fingerprint = `${p.width}-${p.depth}-${p.height}-${p.tier}-${p.frameColor}-${p.boardColor}`;
+      const fingerprint = `${p.width}-${p.depth}-${p.height}-${p.tier}-${p.frameColor}-${p.boardColor}-${p.brand}`;
       if (!mesh || mesh.userData.fingerprint !== fingerprint) {
         if (mesh) {
           group.remove(mesh);
@@ -2182,6 +1917,8 @@ export default function BoothSimulator() {
         instanceId: id,
         productId: tpl.id,
         name: tpl.name,
+        // 브랜드(스피드랙/홈던트하우스) — 속성 패널에서 물품별로 바꿀 수 있음
+        brand: tpl.brand,
         width: tpl.defaultSize.width,
         depth: tpl.defaultSize.depth,
         height: tpl.defaultSize.height,
@@ -2479,15 +2216,6 @@ export default function BoothSimulator() {
     ? PRODUCT_LIBRARY.find((t) => t.id === selected.productId)
     : null;
 
-  // group products by category for left panel
-  const filteredProducts = PRODUCT_LIBRARY.filter((p) =>
-    activeBrand === 'SPEEDRACK'
-      ? p.brand === 'SPEEDRACK'
-      : activeBrand === 'HOMEDANT HOUSE'
-      ? p.brand === 'HOMEDANT HOUSE'
-      : p.brand === 'Exhibition'
-  );
-
   /* ============================================================
      RENDER
      ============================================================ */
@@ -2615,31 +2343,16 @@ export default function BoothSimulator() {
         {/* LEFT PANEL */}
         <aside className="flex-none w-72 border-r border-gray-300 bg-white flex flex-col">
           <div className="flex-none border-b border-gray-200 px-3 py-2.5">
-            <div className="text-xs uppercase tracking-wider text-gray-500 font-medium mb-2">
+            <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">
               물품 보관함
             </div>
-            <div className="flex gap-1">
-              {['SPEEDRACK', 'HOMEDANT HOUSE', 'Exhibition'].map((b) => (
-                <button
-                  key={b}
-                  onClick={() => setActiveBrand(b)}
-                  className={`flex-1 text-xs font-medium px-2 py-1.5 rounded transition ${
-                    activeBrand === b
-                      ? 'bg-gray-900 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {b === 'SPEEDRACK'
-                    ? '스피드랙'
-                    : b === 'HOMEDANT HOUSE'
-                    ? '홈던트하우스'
-                    : '전시회 물품'}
-                </button>
-              ))}
+            <div className="text-xs text-gray-400 mt-1">
+              선반을 클릭해 부스에 추가하세요. 스피드랙·홈던트하우스는 물품 선택 후
+              오른쪽에서 바꿀 수 있어요.
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
-            {filteredProducts.map((tpl) => (
+            {PRODUCT_LIBRARY.map((tpl) => (
               <button
                 key={tpl.id}
                 onClick={() => addProduct(tpl)}
@@ -2919,7 +2632,9 @@ function PropertyPanel({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">
-              {tpl.brand}
+              {(product.brand || tpl.brand) === 'SPEEDRACK'
+                ? '스피드랙'
+                : '홈던트하우스'}
             </div>
             <div className="font-semibold text-sm leading-tight mt-0.5 truncate">
               {product.name}
@@ -2983,6 +2698,34 @@ function PropertyPanel({
           </div>
         </div>
       </div>
+
+      {/* 브랜드 선택 (스피드랙 = 프레임 기둥 타공) */}
+      <Section title="브랜드">
+        <div className="grid grid-cols-2 gap-1">
+          {[
+            ['SPEEDRACK', '스피드랙'],
+            ['HOMEDANT HOUSE', '홈던트하우스'],
+          ].map(([key, label]) => {
+            const active = (product.brand || tpl.brand) === key;
+            return (
+              <button
+                key={key}
+                onClick={() => update({ brand: key })}
+                className={`text-xs py-1.5 px-2 rounded border transition ${
+                  active
+                    ? 'border-red-500 bg-red-50 text-red-700 font-medium'
+                    : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="text-xs text-gray-400 mt-1.5 leading-snug">
+          스피드랙은 프레임 기둥에 타공(구멍)이 있어요.
+        </div>
+      </Section>
 
       {/* dimensions */}
       <Section title="크기">
