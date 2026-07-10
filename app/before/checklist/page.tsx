@@ -1,94 +1,178 @@
 "use client";
 
 // 전시회 준비 체크리스트 화면입니다.
-//  - 기본 항목 목록은 lib/checklist.ts(CHECKLIST)에서 가져옵니다.
-//  - 항목마다 체크 + "진행상황 및 비고"를 적을 수 있고, 직접 항목을 추가/삭제할 수 있어요.
-//  - 저장은 선택한 전시회별로 checklist:<전시회id> 키에 담깁니다.
+//  - "구성"(섹션·항목)은 모든 전시회 공통이며 localStorage(checklist:structure)에 저장돼요.
+//    처음엔 lib/checklist.ts의 기본값(DEFAULT_CHECKLIST)으로 시작합니다.
+//  - "수정" 버튼을 켜면 섹션/항목을 추가·삭제·이름변경·이동할 수 있어요.
+//  - 체크 여부와 "진행상황 및 비고"는 전시회별(checklist:<전시회id>)로 따로 저장됩니다.
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
-import { CHECKLIST, type ChecklistItem, type ChecklistPhase } from "@/lib/checklist";
+import {
+  DEFAULT_CHECKLIST,
+  type ChecklistGroup,
+  type ChecklistPhase,
+} from "@/lib/checklist";
 
-// 항목 하나의 상태(체크 여부 · 진행상황 및 비고)
+// 항목별 진행 상태(체크 · 진행상황 및 비고)
 type ItemState = { done?: boolean; note?: string };
-// 직접 추가한 항목
-type CustomItem = { id: string; phase: ChecklistPhase["key"]; label: string };
-// 전시회 한 개의 체크리스트 저장 형태
-type Data = { items: Record<string, ItemState>; custom: CustomItem[] };
+type Progress = Record<string, ItemState>;
 
-// 기본(템플릿) 항목 id 전부
-const TEMPLATE_ITEMS: ChecklistItem[] = CHECKLIST.flatMap((p) => p.groups.flatMap((g) => g.items));
+const STRUCTURE_KEY = "checklist:structure";
 
-// 저장된 값 불러오기 (예전에 배열/진행상황 분리 형식도 처리)
-function loadData(raw: string | null): Data {
-  if (!raw) return { items: {}, custom: [] };
+// 깊은 복사 (구조 변경이 기본값에 영향 주지 않도록)
+function clone<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v));
+}
+
+function loadStructure(): ChecklistPhase[] {
+  if (typeof window === "undefined") return clone(DEFAULT_CHECKLIST);
+  const raw = localStorage.getItem(STRUCTURE_KEY);
+  if (!raw) return clone(DEFAULT_CHECKLIST);
+  try {
+    const parsed = JSON.parse(raw) as ChecklistPhase[];
+    if (Array.isArray(parsed) && parsed.length) return parsed;
+  } catch {
+    // 형식 오류 시 기본값
+  }
+  return clone(DEFAULT_CHECKLIST);
+}
+
+function loadProgress(raw: string | null): Progress {
+  if (!raw) return {};
   const parsed = JSON.parse(raw);
+  // 예전 배열 형식(체크된 id 목록)도 처리
   if (Array.isArray(parsed)) {
-    const items: Record<string, ItemState> = {};
-    for (const id of parsed as string[]) items[id] = { done: true };
-    return { items, custom: [] };
+    const p: Progress = {};
+    for (const id of parsed as string[]) p[id] = { done: true };
+    return p;
   }
-  // 예전에 progress/note 두 칸으로 저장했던 경우 하나로 합칩니다.
-  const items: Record<string, ItemState> = {};
-  for (const [id, v] of Object.entries((parsed.items ?? {}) as Record<string, { done?: boolean; progress?: string; note?: string }>)) {
+  // 예전 {items:{id:{done,progress,note}}} → note 하나로 합치기
+  const src = (parsed.items ?? {}) as Record<string, { done?: boolean; progress?: string; note?: string }>;
+  const p: Progress = {};
+  for (const [id, v] of Object.entries(src)) {
     const merged = [v.progress, v.note].filter((s) => s && s.trim()).join(" · ");
-    items[id] = { done: v.done, note: merged || undefined };
+    p[id] = { done: v.done, note: merged || undefined };
   }
-  return { items, custom: parsed.custom ?? [] };
+  return p;
 }
 
 export default function ChecklistPage() {
   const { selected } = useExhibitions();
-  const storageKey = selected ? `checklist:${selected.id}` : null;
+  const progressKey = selected ? `checklist:${selected.id}` : null;
 
-  const [data, setData] = useState<Data>({ items: {}, custom: [] });
+  const [structure, setStructure] = useState<ChecklistPhase[]>(() => clone(DEFAULT_CHECKLIST));
+  const [progress, setProgress] = useState<Progress>({});
+  const [editing, setEditing] = useState(false);
 
+  // 구성은 앱 공통이라 처음 한 번만 로드
   useEffect(() => {
-    if (!storageKey) {
-      setData({ items: {}, custom: [] });
+    setStructure(loadStructure());
+  }, []);
+
+  // 진행 상태는 선택한 전시회에 따라 로드
+  useEffect(() => {
+    if (!progressKey) {
+      setProgress({});
       return;
     }
-    setData(loadData(localStorage.getItem(storageKey)));
-  }, [storageKey]);
+    setProgress(loadProgress(localStorage.getItem(progressKey)));
+  }, [progressKey]);
 
-  function update(next: Data) {
-    setData(next);
-    if (storageKey) localStorage.setItem(storageKey, JSON.stringify(next));
+  function saveStructure(next: ChecklistPhase[]) {
+    setStructure(next);
+    localStorage.setItem(STRUCTURE_KEY, JSON.stringify(next));
   }
 
+  function saveProgress(next: Progress) {
+    setProgress(next);
+    if (progressKey) localStorage.setItem(progressKey, JSON.stringify({ items: next }));
+  }
+
+  // ── 진행 상태 변경 ──
   function setItem(id: string, patch: Partial<ItemState>) {
-    update({ ...data, items: { ...data.items, [id]: { ...data.items[id], ...patch } } });
+    saveProgress({ ...progress, [id]: { ...progress[id], ...patch } });
   }
 
-  function addCustom(phase: ChecklistPhase["key"], label: string) {
+  // ── 구성 변경 (수정 모드) ──
+  function updatePhase(phaseKey: string, fn: (groups: ChecklistGroup[]) => ChecklistGroup[]) {
+    saveStructure(
+      structure.map((p) => (p.key === phaseKey ? { ...p, groups: fn(p.groups) } : p)),
+    );
+  }
+
+  function addGroup(phaseKey: string) {
+    updatePhase(phaseKey, (groups) => [
+      ...groups,
+      { id: `g-${crypto.randomUUID()}`, title: "새 섹션", items: [] },
+    ]);
+  }
+
+  function renameGroup(phaseKey: string, groupId: string, title: string) {
+    updatePhase(phaseKey, (groups) => groups.map((g) => (g.id === groupId ? { ...g, title } : g)));
+  }
+
+  function deleteGroup(phaseKey: string, groupId: string) {
+    const g = structure.find((p) => p.key === phaseKey)?.groups.find((x) => x.id === groupId);
+    if (g && g.items.length > 0 && !confirm(`「${g.title}」 섹션과 그 안의 항목 ${g.items.length}개를 지울까요?`)) return;
+    updatePhase(phaseKey, (groups) => groups.filter((g) => g.id !== groupId));
+  }
+
+  function addItem(phaseKey: string, groupId: string, label: string) {
     const clean = label.trim();
     if (!clean) return;
-    update({
-      ...data,
-      custom: [...data.custom, { id: `custom-${crypto.randomUUID()}`, phase, label: clean }],
+    updatePhase(phaseKey, (groups) =>
+      groups.map((g) =>
+        g.id === groupId ? { ...g, items: [...g.items, { id: `i-${crypto.randomUUID()}`, label: clean }] } : g,
+      ),
+    );
+  }
+
+  function renameItem(phaseKey: string, groupId: string, itemId: string, label: string) {
+    updatePhase(phaseKey, (groups) =>
+      groups.map((g) =>
+        g.id === groupId
+          ? { ...g, items: g.items.map((it) => (it.id === itemId ? { ...it, label } : it)) }
+          : g,
+      ),
+    );
+  }
+
+  function deleteItem(phaseKey: string, groupId: string, itemId: string) {
+    updatePhase(phaseKey, (groups) =>
+      groups.map((g) => (g.id === groupId ? { ...g, items: g.items.filter((it) => it.id !== itemId) } : g)),
+    );
+  }
+
+  function moveItem(phaseKey: string, fromGroupId: string, toGroupId: string, itemId: string) {
+    if (fromGroupId === toGroupId) return;
+    updatePhase(phaseKey, (groups) => {
+      const item = groups.find((g) => g.id === fromGroupId)?.items.find((it) => it.id === itemId);
+      if (!item) return groups;
+      return groups.map((g) => {
+        if (g.id === fromGroupId) return { ...g, items: g.items.filter((it) => it.id !== itemId) };
+        if (g.id === toGroupId) return { ...g, items: [...g.items, item] };
+        return g;
+      });
     });
   }
 
-  function removeCustom(id: string) {
-    const items = { ...data.items };
-    delete items[id];
-    update({ items, custom: data.custom.filter((c) => c.id !== id) });
+  function resetStructure() {
+    if (!confirm("체크리스트 구성을 처음 기본값으로 되돌릴까요? (직접 만든 섹션·항목은 사라져요. 체크·비고 기록은 유지)")) return;
+    saveStructure(clone(DEFAULT_CHECKLIST));
   }
 
-  function resetAll() {
-    if (!confirm("이 전시회의 체크·진행상황 및 비고·추가항목을 모두 지울까요?")) return;
-    update({ items: {}, custom: [] });
+  function resetProgress() {
+    if (!confirm("이 전시회의 체크·진행상황 및 비고를 모두 지울까요?")) return;
+    saveProgress({});
   }
 
-  // 진행률 계산 (기본 + 추가 항목 전부)
+  // 진행률 (구조 안 모든 항목 기준)
   const { doneCount, total } = useMemo(() => {
-    const allIds = [...TEMPLATE_ITEMS.map((it) => it.id), ...data.custom.map((c) => c.id)];
-    return {
-      doneCount: allIds.filter((id) => data.items[id]?.done).length,
-      total: allIds.length,
-    };
-  }, [data]);
+    const ids = structure.flatMap((p) => p.groups.flatMap((g) => g.items.map((it) => it.id)));
+    return { doneCount: ids.filter((id) => progress[id]?.done).length, total: ids.length };
+  }, [structure, progress]);
   const overallPct = total ? Math.round((doneCount / total) * 100) : 0;
 
   // 전시회 미선택 안내
@@ -115,13 +199,36 @@ export default function ChecklistPage() {
     <main className="w-full px-8 py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">체크리스트</h1>
-        <button
-          type="button"
-          onClick={resetAll}
-          className="rounded-lg border border-black/15 px-3 py-1.5 text-sm text-zinc-600 hover:bg-black/[0.05] dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[0.06]"
-        >
-          전체 초기화
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {editing && (
+            <button
+              type="button"
+              onClick={resetStructure}
+              className="rounded-lg border border-black/15 px-3 py-1.5 text-sm text-zinc-600 hover:bg-black/[0.05] dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[0.06]"
+            >
+              구성 기본값으로
+            </button>
+          )}
+          {!editing && (
+            <button
+              type="button"
+              onClick={resetProgress}
+              className="rounded-lg border border-black/15 px-3 py-1.5 text-sm text-zinc-600 hover:bg-black/[0.05] dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/[0.06]"
+            >
+              체크 초기화
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setEditing((e) => !e)}
+            className={
+              "rounded-lg px-5 py-2 text-sm font-bold text-white shadow-sm transition " +
+              (editing ? "bg-blue-600 hover:bg-blue-700" : "bg-amber-500 hover:bg-amber-600")
+            }
+          >
+            {editing ? "✓ 수정 완료" : "✏ 항목 수정"}
+          </button>
+        </div>
       </div>
 
       {/* 전시회 배너 */}
@@ -134,34 +241,45 @@ export default function ChecklistPage() {
         </span>
       </div>
 
-      {/* 전체 진행률 */}
-      <section className="mt-4 rounded-2xl border border-black/10 p-5 dark:border-white/10">
-        <div className="flex items-end justify-between">
-          <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">전체 진행률</span>
-          <span className="text-sm text-zinc-500 dark:text-zinc-400">
-            <b className="text-lg text-blue-600 dark:text-blue-400">{doneCount}</b> / {total} 완료 · {overallPct}%
-          </span>
-        </div>
-        <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
-          <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${overallPct}%` }} />
-        </div>
-      </section>
+      {editing ? (
+        <p className="mt-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          🛠 수정 모드예요. 섹션·항목을 추가/삭제/이름변경/이동할 수 있어요. <b>구성 변경은 모든 전시회에 공통 적용</b>돼요.
+        </p>
+      ) : (
+        <>
+          {/* 전체 진행률 */}
+          <section className="mt-4 rounded-2xl border border-black/10 p-5 dark:border-white/10">
+            <div className="flex items-end justify-between">
+              <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">전체 진행률</span>
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                <b className="text-lg text-blue-600 dark:text-blue-400">{doneCount}</b> / {total} 완료 · {overallPct}%
+              </span>
+            </div>
+            <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+              <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${overallPct}%` }} />
+            </div>
+          </section>
+          <p className="mt-3 text-sm text-zinc-500">💡 항목마다 진행상황 및 비고를 바로 적을 수 있어요.</p>
+        </>
+      )}
 
-      <p className="mt-3 text-sm text-zinc-500">
-        💡 항목마다 <b>진행상황 및 비고</b>를 바로 적을 수 있어요. 각 단계 끝의 카드에서 항목을 직접 추가할 수 있어요.
-      </p>
-
-      {/* 단계별(전/중/후) 체크리스트 */}
+      {/* 단계별(전/중/후) */}
       <div className="mt-6 space-y-10">
-        {CHECKLIST.map((phase) => (
+        {structure.map((phase) => (
           <PhaseBlock
             key={phase.key}
             phase={phase}
-            data={data}
-            onToggle={(id) => setItem(id, { done: !data.items[id]?.done })}
+            progress={progress}
+            editing={editing}
+            onToggle={(id) => setItem(id, { done: !progress[id]?.done })}
             onNote={(id, v) => setItem(id, { note: v })}
-            onAddCustom={(label) => addCustom(phase.key, label)}
-            onRemoveCustom={removeCustom}
+            onAddGroup={() => addGroup(phase.key)}
+            onRenameGroup={(gid, t) => renameGroup(phase.key, gid, t)}
+            onDeleteGroup={(gid) => deleteGroup(phase.key, gid)}
+            onAddItem={(gid, label) => addItem(phase.key, gid, label)}
+            onRenameItem={(gid, iid, label) => renameItem(phase.key, gid, iid, label)}
+            onDeleteItem={(gid, iid) => deleteItem(phase.key, gid, iid)}
+            onMoveItem={(from, to, iid) => moveItem(phase.key, from, to, iid)}
           />
         ))}
       </div>
@@ -172,130 +290,234 @@ export default function ChecklistPage() {
 // 한 단계(전/중/후) 블록
 function PhaseBlock({
   phase,
-  data,
+  progress,
+  editing,
   onToggle,
   onNote,
-  onAddCustom,
-  onRemoveCustom,
+  onAddGroup,
+  onRenameGroup,
+  onDeleteGroup,
+  onAddItem,
+  onRenameItem,
+  onDeleteItem,
+  onMoveItem,
 }: {
   phase: ChecklistPhase;
-  data: Data;
+  progress: Progress;
+  editing: boolean;
   onToggle: (id: string) => void;
   onNote: (id: string, v: string) => void;
-  onAddCustom: (label: string) => void;
-  onRemoveCustom: (id: string) => void;
+  onAddGroup: () => void;
+  onRenameGroup: (groupId: string, title: string) => void;
+  onDeleteGroup: (groupId: string) => void;
+  onAddItem: (groupId: string, label: string) => void;
+  onRenameItem: (groupId: string, itemId: string, label: string) => void;
+  onDeleteItem: (groupId: string, itemId: string) => void;
+  onMoveItem: (fromGroupId: string, toGroupId: string, itemId: string) => void;
 }) {
-  const customItems = data.custom.filter((c) => c.phase === phase.key);
-  const templateItems = phase.groups.flatMap((g) => g.items);
-  const allIds = [...templateItems.map((it) => it.id), ...customItems.map((c) => c.id)];
-  const done = allIds.filter((id) => data.items[id]?.done).length;
+  const allIds = phase.groups.flatMap((g) => g.items.map((it) => it.id));
+  const done = allIds.filter((id) => progress[id]?.done).length;
   const pct = allIds.length ? Math.round((done / allIds.length) * 100) : 0;
 
   return (
     <section>
-      {/* 단계 헤더 */}
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-2xl">{phase.emoji}</span>
         <h2 className="text-xl font-bold">{phase.label}</h2>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="hidden h-2 w-32 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08] sm:block">
-            <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+        {!editing && (
+          <div className="ml-auto flex items-center gap-2">
+            <div className="hidden h-2 w-32 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08] sm:block">
+              <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">
+              {done} / {allIds.length}
+            </span>
           </div>
-          <span className="text-sm text-zinc-500 dark:text-zinc-400">
-            {done} / {allIds.length}
-          </span>
-        </div>
+        )}
       </div>
 
-      {/* 대분류 카드들 — 넓게 여러 열로 배치 */}
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {phase.groups.map((group) => {
-          const gDone = group.items.filter((it) => data.items[it.id]?.done).length;
-          return (
-            <GroupCard key={group.title} title={group.title} done={gDone} all={group.items.length}>
-              {group.items.map((item) => (
-                <ItemRow
-                  key={item.id}
-                  label={item.label}
-                  note={item.note}
-                  state={data.items[item.id]}
-                  onToggle={() => onToggle(item.id)}
-                  onNote={(v) => onNote(item.id, v)}
-                />
-              ))}
-            </GroupCard>
-          );
-        })}
+        {phase.groups.map((group) => (
+          <GroupCard
+            key={group.id}
+            group={group}
+            phase={phase}
+            progress={progress}
+            editing={editing}
+            onToggle={onToggle}
+            onNote={onNote}
+            onRenameGroup={(t) => onRenameGroup(group.id, t)}
+            onDeleteGroup={() => onDeleteGroup(group.id)}
+            onAddItem={(label) => onAddItem(group.id, label)}
+            onRenameItem={(iid, label) => onRenameItem(group.id, iid, label)}
+            onDeleteItem={(iid) => onDeleteItem(group.id, iid)}
+            onMoveItem={(to, iid) => onMoveItem(group.id, to, iid)}
+          />
+        ))}
 
-        {/* 직접 추가한 항목 + 추가 폼 */}
-        <AddCard
-          items={customItems}
-          data={data}
-          onToggle={onToggle}
-          onNote={onNote}
-          onRemove={onRemoveCustom}
-          onAdd={onAddCustom}
-        />
+        {/* 섹션 추가 (수정 모드) */}
+        {editing && (
+          <button
+            type="button"
+            onClick={onAddGroup}
+            className="flex min-h-[6rem] items-center justify-center rounded-2xl border border-dashed border-blue-400/60 bg-blue-50/40 p-5 text-sm font-semibold text-blue-700 hover:bg-blue-100/60 dark:border-blue-500/40 dark:bg-blue-950/15 dark:text-blue-300 dark:hover:bg-blue-950/30"
+          >
+            ＋ 섹션 추가
+          </button>
+        )}
       </div>
     </section>
   );
 }
 
-// 대분류 카드 껍데기
+// 섹션(대분류) 카드
 function GroupCard({
-  title,
-  done,
-  all,
-  children,
+  group,
+  phase,
+  progress,
+  editing,
+  onToggle,
+  onNote,
+  onRenameGroup,
+  onDeleteGroup,
+  onAddItem,
+  onRenameItem,
+  onDeleteItem,
+  onMoveItem,
 }: {
-  title: string;
-  done: number;
-  all: number;
-  children: React.ReactNode;
+  group: ChecklistGroup;
+  phase: ChecklistPhase;
+  progress: Progress;
+  editing: boolean;
+  onToggle: (id: string) => void;
+  onNote: (id: string, v: string) => void;
+  onRenameGroup: (title: string) => void;
+  onDeleteGroup: () => void;
+  onAddItem: (label: string) => void;
+  onRenameItem: (itemId: string, label: string) => void;
+  onDeleteItem: (itemId: string) => void;
+  onMoveItem: (toGroupId: string, itemId: string) => void;
 }) {
-  const complete = all > 0 && done === all;
+  const [newItem, setNewItem] = useState("");
+  const done = group.items.filter((it) => progress[it.id]?.done).length;
+  const complete = group.items.length > 0 && done === group.items.length;
+  const otherGroups = phase.groups.filter((g) => g.id !== group.id);
+
+  function submitItem() {
+    onAddItem(newItem);
+    setNewItem("");
+  }
+
   return (
     <div className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-zinc-900">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-base font-bold text-zinc-700 dark:text-zinc-200">{title}</h3>
-        <span
-          className={
-            "rounded-full px-2 py-0.5 text-xs font-semibold " +
-            (complete
-              ? "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
-              : "bg-black/[0.05] text-zinc-500 dark:bg-white/[0.08] dark:text-zinc-400")
-          }
-        >
-          {done}/{all}
-        </span>
+      {/* 헤더: 제목 (수정 모드에선 입력칸) */}
+      <div className="mb-3 flex items-center justify-between gap-2">
+        {editing ? (
+          <input
+            type="text"
+            value={group.title}
+            onChange={(e) => onRenameGroup(e.target.value)}
+            placeholder="섹션 이름"
+            className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white px-2.5 py-1.5 text-base font-bold dark:border-white/15 dark:bg-zinc-950"
+          />
+        ) : (
+          <h3 className="text-base font-bold text-zinc-700 dark:text-zinc-200">{group.title}</h3>
+        )}
+        {editing ? (
+          <button
+            type="button"
+            onClick={onDeleteGroup}
+            aria-label="섹션 삭제"
+            className="shrink-0 rounded-md border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/30"
+          >
+            섹션 삭제
+          </button>
+        ) : (
+          <span
+            className={
+              "rounded-full px-2 py-0.5 text-xs font-semibold " +
+              (complete
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+                : "bg-black/[0.05] text-zinc-500 dark:bg-white/[0.08] dark:text-zinc-400")
+            }
+          >
+            {done}/{group.items.length}
+          </span>
+        )}
       </div>
-      <ul className="space-y-3">{children}</ul>
+
+      <ul className={editing ? "space-y-2" : "space-y-3"}>
+        {group.items.map((item) =>
+          editing ? (
+            <EditItemRow
+              key={item.id}
+              label={item.label}
+              otherGroups={otherGroups}
+              onRename={(v) => onRenameItem(item.id, v)}
+              onDelete={() => onDeleteItem(item.id)}
+              onMove={(toId) => onMoveItem(toId, item.id)}
+            />
+          ) : (
+            <ItemRow
+              key={item.id}
+              label={item.label}
+              note={item.note}
+              state={progress[item.id]}
+              onToggle={() => onToggle(item.id)}
+              onNote={(v) => onNote(item.id, v)}
+            />
+          ),
+        )}
+        {editing && group.items.length === 0 && (
+          <li className="rounded-lg py-2 text-center text-xs text-zinc-400">아직 항목이 없어요.</li>
+        )}
+      </ul>
+
+      {/* 항목 추가 (수정 모드) */}
+      {editing && (
+        <div className="mt-3 flex gap-2">
+          <input
+            type="text"
+            value={newItem}
+            onChange={(e) => setNewItem(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submitItem();
+            }}
+            placeholder="새 항목 입력 후 Enter"
+            className="flex-1 rounded-lg border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-zinc-950"
+          />
+          <button
+            type="button"
+            onClick={submitItem}
+            disabled={!newItem.trim()}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+          >
+            추가
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-// 항목 한 줄 (체크 + 라벨 + 항상 보이는 "진행상황 및 비고" 칸)
+// 항목 한 줄 (일반 모드: 체크 + 라벨 + 진행상황 및 비고)
 function ItemRow({
   label,
   note,
   state,
   onToggle,
   onNote,
-  onRemove,
 }: {
   label: string;
   note?: string;
   state?: ItemState;
   onToggle: () => void;
   onNote: (v: string) => void;
-  onRemove?: () => void;
 }) {
   const on = !!state?.done;
-
   return (
     <li>
       <div className="flex items-start gap-2.5">
-        {/* 체크박스 */}
         <button
           type="button"
           onClick={onToggle}
@@ -307,8 +529,6 @@ function ItemRow({
         >
           {on ? "✓" : ""}
         </button>
-
-        {/* 라벨 */}
         <div className="flex-1">
           <span
             className={
@@ -320,21 +540,7 @@ function ItemRow({
           </span>
           {note && <span className="mt-0.5 block text-sm text-zinc-400 dark:text-zinc-500">{note}</span>}
         </div>
-
-        {/* 삭제(추가 항목만) */}
-        {onRemove && (
-          <button
-            type="button"
-            onClick={onRemove}
-            aria-label="항목 삭제"
-            className="shrink-0 rounded-md px-1.5 py-0.5 text-sm text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
-          >
-            ✕
-          </button>
-        )}
       </div>
-
-      {/* 진행상황 및 비고 (항상 보임) */}
       <input
         type="text"
         value={state?.note ?? ""}
@@ -346,76 +552,53 @@ function ItemRow({
   );
 }
 
-// "직접 추가한 항목" 카드 (목록 + 추가 입력)
-function AddCard({
-  items,
-  data,
-  onToggle,
-  onNote,
-  onRemove,
-  onAdd,
+// 항목 한 줄 (수정 모드: 이름변경 + 이동 + 삭제)
+function EditItemRow({
+  label,
+  otherGroups,
+  onRename,
+  onDelete,
+  onMove,
 }: {
-  items: CustomItem[];
-  data: Data;
-  onToggle: (id: string) => void;
-  onNote: (id: string, v: string) => void;
-  onRemove: (id: string) => void;
-  onAdd: (label: string) => void;
+  label: string;
+  otherGroups: ChecklistGroup[];
+  onRename: (v: string) => void;
+  onDelete: () => void;
+  onMove: (toGroupId: string) => void;
 }) {
-  const [text, setText] = useState("");
-  const done = items.filter((it) => data.items[it.id]?.done).length;
-
-  function submit() {
-    onAdd(text);
-    setText("");
-  }
-
   return (
-    <div className="rounded-2xl border border-dashed border-blue-400/60 bg-blue-50/40 p-5 dark:border-blue-500/40 dark:bg-blue-950/15">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-base font-bold text-blue-700 dark:text-blue-300">➕ 직접 추가한 항목</h3>
-        {items.length > 0 && (
-          <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-xs font-semibold text-zinc-500 dark:bg-white/[0.08] dark:text-zinc-400">
-            {done}/{items.length}
-          </span>
-        )}
-      </div>
-
-      {items.length > 0 && (
-        <ul className="mb-3 space-y-3">
-          {items.map((it) => (
-            <ItemRow
-              key={it.id}
-              label={it.label}
-              state={data.items[it.id]}
-              onToggle={() => onToggle(it.id)}
-              onNote={(v) => onNote(it.id, v)}
-              onRemove={() => onRemove(it.id)}
-            />
-          ))}
-        </ul>
-      )}
-
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
+    <li className="flex items-center gap-2">
+      <input
+        type="text"
+        value={label}
+        onChange={(e) => onRename(e.target.value)}
+        className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white px-2.5 py-1.5 text-sm dark:border-white/15 dark:bg-zinc-950"
+      />
+      {otherGroups.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) onMove(e.target.value);
           }}
-          placeholder="새 항목 입력 후 Enter"
-          className="flex-1 rounded-lg border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-zinc-950"
-        />
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!text.trim()}
-          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+          aria-label="다른 섹션으로 이동"
+          className="shrink-0 rounded-lg border border-black/15 bg-white px-1.5 py-1.5 text-xs text-zinc-600 dark:border-white/15 dark:bg-zinc-950 dark:text-zinc-300"
         >
-          추가
-        </button>
-      </div>
-    </div>
+          <option value="">이동…</option>
+          {otherGroups.map((g) => (
+            <option key={g.id} value={g.id}>
+              → {g.title}
+            </option>
+          ))}
+        </select>
+      )}
+      <button
+        type="button"
+        onClick={onDelete}
+        aria-label="항목 삭제"
+        className="shrink-0 rounded-md px-1.5 py-1 text-sm text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+      >
+        ✕
+      </button>
+    </li>
   );
 }

@@ -172,9 +172,13 @@ export default function SearchPage() {
   return (
     <main className="w-full px-8 py-8">
       <h1 className="text-3xl font-bold tracking-tight">전시회 일정 조회</h1>
-      <p className="mt-2 text-sm text-zinc-500">
-        GEP(글로벌 전시 플랫폼) 해외전시회 데이터에서 국가·연도·산업분야·이름으로 검색해요.
-      </p>
+      <div className="mt-3 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+        <span className="text-base">🌐</span>
+        <span>
+          <b>GEP(KOTRA 글로벌 전시 플랫폼)</b>의 API를 통하여 해외전시회 데이터를 자동 반영합니다.
+        </span>
+      </div>
+      <p className="mt-2 text-sm text-zinc-500">국가 · 연도 · 산업분야 · 이름으로 검색할 수 있어요.</p>
 
       {/* 검색 조건 */}
       <section className="mt-6 rounded-2xl border border-black/10 p-6 dark:border-white/10">

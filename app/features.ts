@@ -20,7 +20,6 @@ export const phases: Phase[] = [
     label: "전시회 전",
     emoji: "📦",
     features: [
-      { title: "체크리스트", desc: "전시회 준비 할 일 체크", href: "/before/checklist" },
       { title: "부스 시뮬레이션", desc: "부스 배치 시뮬레이션", href: "/before/booth" },
       { title: "전시품목Shipment", desc: "품목 · BOM · 선적서류", href: "/before/shipment" },
     ],
