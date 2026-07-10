@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# booth simulator source (재빌드용 소스). node_modules/dist 는 제외
+/booth-sim/node_modules
+/booth-sim/dist
