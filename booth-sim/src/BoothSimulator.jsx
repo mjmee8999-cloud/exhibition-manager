@@ -6,12 +6,9 @@ import {
   Copy,
   RotateCw,
   Save,
-  Upload,
-  Download,
   Camera,
   Eye,
   Box,
-  Move,
   Grid3x3,
   Layers,
   Home,
@@ -19,7 +16,6 @@ import {
   ChevronDown,
   ChevronRight,
   Maximize2,
-  FilePlus,
 } from 'lucide-react';
 
 /* ============================================================
@@ -693,7 +689,6 @@ function scoreBestMatch(candidates, p) {
    UNIT CONVERSION HELPERS
    ============================================================ */
 const MM_PER_FT = 304.8;
-const MM_PER_IN = 25.4;
 const MM_TO_M = 0.001;
 const toMM = (val, unit) => {
   if (unit === 'mm') return val;
@@ -709,7 +704,6 @@ const fromMM = (mm, unit) => {
   if (unit === 'ft') return +(mm / MM_PER_FT).toFixed(2);
   return mm;
 };
-const mmToInch = (mm) => +(mm / MM_PER_IN).toFixed(1);
 
 /* ============================================================
    3D MESH BUILDER
@@ -1194,57 +1188,6 @@ function buildRolling(group, p, tpl) {
     wm.position.set(pos[0], pos[1], pos[2]);
     group.add(wm);
   });
-}
-
-/* --- Curtain fabric texture: vertical pleats / drape shading ---
-   Produces the soft pleated look of a real pipe-and-drape booth curtain
-   (matches the reference photo). Cached as one shared texture; callers
-   clone it and set repeat to suit each panel's width.                  */
-let _curtainTex = null;
-function makeCurtainTexture() {
-  if (_curtainTex) return _curtainTex;
-  const W = 256,
-    H = 256;
-  const cv = document.createElement('canvas');
-  cv.width = W;
-  cv.height = H;
-  const ctx = cv.getContext('2d');
-
-  // base fabric tone — a neutral warm grey like the reference drape
-  ctx.fillStyle = '#9a9893';
-  ctx.fillRect(0, 0, W, H);
-
-  // vertical pleats: alternating light/shadow bands down the fabric
-  const pleats = 18;
-  const pw = W / pleats;
-  for (let i = 0; i < pleats; i++) {
-    const x = i * pw;
-    // each pleat = a soft gradient from shadow (fold) to highlight (crest)
-    const g = ctx.createLinearGradient(x, 0, x + pw, 0);
-    g.addColorStop(0.0, 'rgba(60,58,55,0.55)'); // deep fold
-    g.addColorStop(0.35, 'rgba(255,255,255,0.10)');
-    g.addColorStop(0.5, 'rgba(255,255,255,0.22)'); // crest highlight
-    g.addColorStop(0.65, 'rgba(255,255,255,0.10)');
-    g.addColorStop(1.0, 'rgba(60,58,55,0.55)'); // deep fold
-    ctx.fillStyle = g;
-    ctx.fillRect(x, 0, pw, H);
-  }
-
-  // faint horizontal weave noise so the fabric isn't perfectly smooth
-  const img = ctx.getImageData(0, 0, W, H);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * 14;
-    img.data[i] = Math.max(0, Math.min(255, img.data[i] + n));
-    img.data[i + 1] = Math.max(0, Math.min(255, img.data[i + 1] + n));
-    img.data[i + 2] = Math.max(0, Math.min(255, img.data[i + 2] + n));
-  }
-  ctx.putImageData(img, 0, 0);
-
-  const tex = new THREE.CanvasTexture(cv);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.needsUpdate = true;
-  _curtainTex = tex;
-  return tex;
 }
 
 /* --- Pegboard panel texture: regular grid of small holes --- */
@@ -1801,8 +1744,8 @@ export default function BoothSimulator() {
     width: 6096, // 20ft in mm  (10ft x 20ft default)
     depth: 3048, // 10ft in mm
     wallHeight: 2438, // 8ft in mm
-    unit: 'ft',
-    style: 'wall', // 'wall' = solid panel booth, 'curtain' = curtain booth
+    unit: 'm', // 기본 단위: 미터
+    walls: { left: true, back: true, right: true }, // 세울 벽 (개별 on/off)
   });
   const [products, setProducts] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -1972,154 +1915,23 @@ export default function BoothSimulator() {
     grid.position.y = 0.001;
     group.add(grid);
 
-    if (booth.style === 'curtain') {
-      // ---- CURTAIN BOOTH (pipe & drape) ----
-      // Matches a real inline curtain booth: a TALL back curtain (full
-      // wall height) and SHORT side curtains (~3ft vs 8ft = ~0.375 of
-      // the back height), each on its own pipe frame.
-      const poleMat = new THREE.MeshStandardMaterial({
-        color: 0x9aa0a6,
-        roughness: 0.5,
-        metalness: 0.6,
-      });
-      const poleR = 0.025;
-      const railR = 0.018;
-      const sideH = wh * 0.375; // 3ft side rail vs 8ft back wall
+    // ---- 벽 세우기: 원하는 벽만 (왼쪽 / 뒤쪽 / 오른쪽) ----
+    const walls = booth.walls || { left: true, back: true, right: true };
+    const wallMat = new THREE.MeshStandardMaterial({
+      color: 0xf5f5f5,
+      roughness: 0.9,
+      side: THREE.DoubleSide,
+    });
+    const wallThk = 0.05;
 
-      // --- back frame: 2 tall poles + top rail ---
-      [[-w / 2], [w / 2]].forEach(([cx]) => {
-        const pole = new THREE.Mesh(
-          new THREE.CylinderGeometry(poleR, poleR, wh, 12),
-          poleMat
-        );
-        pole.position.set(cx, wh / 2, -d / 2);
-        pole.castShadow = true;
-        group.add(pole);
-      });
-      const backRail = new THREE.Mesh(
-        new THREE.CylinderGeometry(railR, railR, w, 12),
-        poleMat
-      );
-      backRail.rotation.z = Math.PI / 2;
-      backRail.position.set(0, wh - railR, -d / 2);
-      group.add(backRail);
-
-      // --- side frames: 2 short front poles + 2 short side rails ---
-      [[-w / 2], [w / 2]].forEach(([cx]) => {
-        const pole = new THREE.Mesh(
-          new THREE.CylinderGeometry(poleR, poleR, sideH, 12),
-          poleMat
-        );
-        pole.position.set(cx, sideH / 2, d / 2); // front corner pole
-        pole.castShadow = true;
-        group.add(pole);
-        // short side rail running front-to-back at the side height
-        const sideRail = new THREE.Mesh(
-          new THREE.CylinderGeometry(railR, railR, d, 12),
-          poleMat
-        );
-        sideRail.rotation.x = Math.PI / 2;
-        sideRail.position.set(cx, sideH - railR, 0);
-        group.add(sideRail);
-      });
-
-      // --- curtain fabric material with pleated texture ---
-      const makeCurtainMat = (panelW, panelH) => {
-        const tex = makeCurtainTexture().clone();
-        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-        // repeat horizontally so pleats stay a natural width (~0.5m each)
-        tex.repeat.set(Math.max(2, Math.round(panelW / 0.5)), 1);
-        tex.anisotropy = 8;
-        tex.needsUpdate = true;
-        return new THREE.MeshStandardMaterial({
-          map: tex,
-          color: 0xffffff,
-          roughness: 0.95,
-          metalness: 0.0,
-          side: THREE.DoubleSide,
-        });
-      };
-      // geometry helper — a plane with soft in/out folds across its width
-      const makeCurtainGeo = (cw, ch, segs) => {
-        const geo = new THREE.PlaneGeometry(cw, ch, segs, 1);
-        const pos = geo.attributes.position;
-        for (let i = 0; i < pos.count; i++) {
-          const xx = pos.getX(i);
-          const fold = Math.sin((xx / cw) * Math.PI * segs) * 0.025;
-          pos.setZ(i, fold);
-        }
-        geo.computeVertexNormals();
-        return geo;
-      };
-
-      // back curtain — full height
-      const backH = wh - railR * 2;
-      const backCurtain = new THREE.Mesh(
-        makeCurtainGeo(w, backH, 16),
-        makeCurtainMat(w, backH)
-      );
-      backCurtain.position.set(0, backH / 2 + railR, -d / 2);
-      backCurtain.receiveShadow = true;
-      group.add(backCurtain);
-
-      // side curtains — short (3ft) height
-      const sideCurtainH = sideH - railR * 2;
-      [[-w / 2], [w / 2]].forEach(([sx]) => {
-        const sideCurtain = new THREE.Mesh(
-          makeCurtainGeo(d, sideCurtainH, 12),
-          makeCurtainMat(d, sideCurtainH)
-        );
-        sideCurtain.rotation.y = Math.PI / 2;
-        sideCurtain.position.set(sx, sideCurtainH / 2 + railR, 0);
-        sideCurtain.receiveShadow = true;
-        group.add(sideCurtain);
-      });
-
-      // brand strip — ID-sign valance across the top of the back curtain
-      const valGeo = new THREE.BoxGeometry(w * 0.55, 0.22, 0.03);
-      const valMat = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.7,
-      });
-      const valance = new THREE.Mesh(valGeo, valMat);
-      valance.position.set(0, wh - 0.18, -d / 2 + 0.03);
-      group.add(valance);
-      // thin red accent line under the sign
-      const accentGeo = new THREE.BoxGeometry(w * 0.55, 0.03, 0.035);
-      const accentMat = new THREE.MeshStandardMaterial({
-        color: 0xc62828,
-        roughness: 0.7,
-      });
-      const accent = new THREE.Mesh(accentGeo, accentMat);
-      accent.position.set(0, wh - 0.31, -d / 2 + 0.035);
-      group.add(accent);
-    } else {
-      // ---- WALL BOOTH: solid panel walls (default) ----
-      const wallMat = new THREE.MeshStandardMaterial({
-        color: 0xf5f5f5,
-        roughness: 0.9,
-        side: THREE.DoubleSide,
-      });
-      const wallThk = 0.05;
-      // back wall (along +X)
+    // 뒤쪽 벽
+    if (walls.back) {
       const backGeo = new THREE.BoxGeometry(w, wh, wallThk);
       const back = new THREE.Mesh(backGeo, wallMat);
       back.position.set(0, wh / 2, -d / 2);
       back.receiveShadow = true;
       group.add(back);
-      // left wall
-      const sideGeo = new THREE.BoxGeometry(wallThk, wh, d);
-      const left = new THREE.Mesh(sideGeo, wallMat);
-      left.position.set(-w / 2, wh / 2, 0);
-      left.receiveShadow = true;
-      group.add(left);
-      // right wall
-      const right = new THREE.Mesh(sideGeo, wallMat);
-      right.position.set(w / 2, wh / 2, 0);
-      right.receiveShadow = true;
-      group.add(right);
-
-      // brand strip (red accent on back wall top)
+      // 뒤쪽 벽 상단 빨강 라인 (브랜드 스트립)
       const stripGeo = new THREE.BoxGeometry(w, 0.15, 0.06);
       const stripMat = new THREE.MeshStandardMaterial({
         color: 0xc62828,
@@ -2130,12 +1942,27 @@ export default function BoothSimulator() {
       group.add(strip);
     }
 
+    // 좌우 벽
+    const sideGeo = new THREE.BoxGeometry(wallThk, wh, d);
+    if (walls.left) {
+      const left = new THREE.Mesh(sideGeo, wallMat);
+      left.position.set(-w / 2, wh / 2, 0);
+      left.receiveShadow = true;
+      group.add(left);
+    }
+    if (walls.right) {
+      const right = new THREE.Mesh(sideGeo, wallMat);
+      right.position.set(w / 2, wh / 2, 0);
+      right.receiveShadow = true;
+      group.add(right);
+    }
+
     // recenter camera target on booth
     if (controlsRef.current) {
       controlsRef.current.target.set(0, wh * 0.3, 0);
       controlsRef.current.update();
     }
-  }, [booth.width, booth.depth, booth.wallHeight, booth.style]);
+  }, [booth.width, booth.depth, booth.wallHeight, booth.walls]);
 
   /* ---------- sync products meshes ---------- */
   useEffect(() => {
@@ -2440,46 +2267,6 @@ export default function BoothSimulator() {
   }, [selectedId]);
 
   /* ---------- save / load / export ---------- */
-  const saveJSON = () => {
-    const data = {
-      version: 1,
-      layoutName,
-      booth,
-      products,
-      savedAt: new Date().toISOString(),
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(layoutName || 'homedant_booth').replace(
-      /[^a-zA-Z0-9_-]/g,
-      '_'
-    )}_${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const loadJSON = (file) => {
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (data.booth) setBooth(data.booth);
-        if (Array.isArray(data.products)) {
-          setProducts(data.products);
-          setSelectedId(null);
-        }
-        if (data.layoutName) setLayoutName(data.layoutName);
-      } catch (err) {
-        alert('Invalid JSON file: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
-  };
-
   const savePNG = () => {
     const renderer = rendererRef.current;
     const scene = sceneRef.current;
@@ -2626,7 +2413,8 @@ export default function BoothSimulator() {
 
   const loadDesign = (design) => {
     if (!design) return;
-    if (design.booth) setBooth(design.booth);
+    if (design.booth)
+      setBooth({ walls: { left: true, back: true, right: true }, ...design.booth });
     if (Array.isArray(design.products)) {
       setProducts(design.products.map((p) => ({ ...p })));
       setSelectedId(null);
@@ -2676,57 +2464,12 @@ export default function BoothSimulator() {
   }, []);
 
   /* ---------- presets ---------- */
-  const applyTemplate = (tpl) => {
-    if (tpl === '10x10')
-      setBooth({
-        ...booth,
-        width: 10 * MM_PER_FT,
-        depth: 10 * MM_PER_FT,
-        unit: 'ft',
-      });
-    else if (tpl === '10x20')
-      setBooth({
-        ...booth,
-        width: 20 * MM_PER_FT,
-        depth: 10 * MM_PER_FT,
-        unit: 'ft',
-      });
-    else if (tpl === '20x20')
-      setBooth({
-        ...booth,
-        width: 20 * MM_PER_FT,
-        depth: 20 * MM_PER_FT,
-        unit: 'ft',
-      });
-  };
-
-  /* ---------- create a fresh, empty layout ---------- */
-  const createLayout = () => {
-    // confirm before discarding in-progress work
-    if (products.length > 0) {
-      const ok = window.confirm(
-        'Start a new layout? This clears the current booth.\n' +
-          'Save it to the 디자인 보관함 first if you want to keep it.'
-      );
-      if (!ok) return;
-    }
-    setProducts([]);
-    setSelectedId(null);
-    setWarnings({});
-    setLayoutName('layout1');
-    setCurrentDesignId(null); // fresh layout — next save creates a new entry
-    // reset booth to the default size/style but keep the current unit
-    setBooth((b) => ({
-      width: 6096,
-      depth: 3048,
-      wallHeight: 2438,
-      unit: b.unit,
-      style: 'wall',
-    }));
-  };
-
-  /* ---------- switch booth style (wall / curtain) ---------- */
-  const setBoothStyle = (style) => setBooth((b) => ({ ...b, style }));
+  /* ---------- 벽 개별 세우기/없애기 (왼쪽·뒤쪽·오른쪽) ---------- */
+  const toggleWall = (side) =>
+    setBooth((b) => {
+      const walls = b.walls || { left: true, back: true, right: true };
+      return { ...b, walls: { ...walls, [side]: !walls[side] } };
+    });
 
   /* ---------- selected product convenience ---------- */
   const selected = products.find((p) => p.instanceId === selectedId);
@@ -2796,51 +2539,33 @@ export default function BoothSimulator() {
             </select>
           </div>
 
-          {/* templates */}
+          {/* 벽 세우기 (왼쪽 / 뒤쪽 / 오른쪽 개별 on·off) */}
           <div className="flex items-center gap-1 pl-3 border-l border-gray-200">
             <span className="text-xs uppercase tracking-wider text-gray-500 font-medium mr-1">
-              템플릿
+              벽
             </span>
-            <PresetBtn onClick={() => applyTemplate('10x10')}>
-              10×10 ft
-            </PresetBtn>
-            <PresetBtn onClick={() => applyTemplate('10x20')}>
-              10×20 ft
-            </PresetBtn>
-            <PresetBtn onClick={() => applyTemplate('20x20')}>
-              20×20 ft
-            </PresetBtn>
-          </div>
-
-          {/* booth style: wall vs curtain */}
-          <div className="flex items-center gap-1 pl-3 border-l border-gray-200">
-            <span className="text-xs uppercase tracking-wider text-gray-500 font-medium mr-1">
-              부스 형태
-            </span>
-            <button
-              onClick={() => setBoothStyle('wall')}
-              className={
-                'text-xs px-2 py-1 rounded border transition ' +
-                (booth.style === 'wall'
-                  ? 'bg-gray-900 text-white border-gray-900'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50')
-              }
-              title="단단한 판넬 벽"
-            >
-              벽 부스
-            </button>
-            <button
-              onClick={() => setBoothStyle('curtain')}
-              className={
-                'text-xs px-2 py-1 rounded border transition ' +
-                (booth.style === 'curtain'
-                  ? 'bg-gray-900 text-white border-gray-900'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50')
-              }
-              title="기둥 프레임 + 천 커튼"
-            >
-              커튼 부스
-            </button>
+            {[
+              ['left', '왼쪽'],
+              ['back', '뒤쪽'],
+              ['right', '오른쪽'],
+            ].map(([side, label]) => {
+              const on = (booth.walls || {})[side];
+              return (
+                <button
+                  key={side}
+                  onClick={() => toggleWall(side)}
+                  className={
+                    'text-xs px-2 py-1 rounded border transition ' +
+                    (on
+                      ? 'bg-gray-900 text-white border-gray-900'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50')
+                  }
+                  title={`${label} 벽 세우기 / 없애기`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
 
           {/* 배치 이름 + create new */}
@@ -2856,12 +2581,6 @@ export default function BoothSimulator() {
               className="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white w-28"
               title="내보낸 PNG 파일 이름에 사용돼요"
             />
-            <IconBtn
-              onClick={createLayout}
-              title="새 빈 부스 배치 시작"
-            >
-              <FilePlus className="w-3.5 h-3.5" /> 배치 만들기
-            </IconBtn>
           </div>
 
           <div className="flex-1 min-w-0" />
@@ -2909,27 +2628,6 @@ export default function BoothSimulator() {
             >
               <Layers className="w-3.5 h-3.5" /> 보관함
             </IconBtn>
-            <div className="w-px h-5 bg-gray-300 mx-1" />
-            <IconBtn onClick={saveJSON} title="JSON 파일로 내려받기">
-              <Download className="w-3.5 h-3.5" /> JSON
-            </IconBtn>
-            <label
-              title="JSON 파일 불러오기"
-              className="cursor-pointer inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded border border-gray-300 hover:bg-gray-50 transition"
-            >
-              <Upload className="w-3.5 h-3.5" /> 불러오기
-              <input
-                type="file"
-                accept=".json"
-                hidden
-                onChange={(e) => {
-                  if (e.target.files[0]) {
-                    loadJSON(e.target.files[0]);
-                    e.target.value = '';
-                  }
-                }}
-              />
-            </label>
           </div>
         </div>
       </header>
@@ -3321,7 +3019,7 @@ function PropertyPanel({
               {refImg.width && refImg.depth && refImg.height
                 ? `${refImg.width}×${refImg.depth}×${refImg.height}`
                 : '—'}
-              {refImg.tier ? ` / ${refImg.tier}-Tier` : ''}
+              {refImg.tier ? ` / ${refImg.tier}단` : ''}
               {refImg.color ? ` / ${refImg.color}` : ''}
             </div>
           ) : (
@@ -3330,7 +3028,7 @@ function PropertyPanel({
           <div className="text-gray-900 font-medium">
             <span className="text-gray-400 font-normal">현재 설정: </span>
             {product.width}×{product.depth}×{product.height}
-            {product.tier ? ` / ${product.tier}-Tier` : ''}
+            {product.tier ? ` / ${product.tier}단` : ''}
             {product.frameColor ? ` / ${product.frameColor}` : ''}
           </div>
         </div>
@@ -3365,7 +3063,7 @@ function PropertyPanel({
             >
               {tpl.tierOptions.map((t) => (
                 <option key={t} value={t}>
-                  {t}-Tier
+                  {t}단
                 </option>
               ))}
             </select>
@@ -3550,17 +3248,6 @@ function NumInput({ label, valueMM, unit, onChange }) {
   );
 }
 
-function PresetBtn({ children, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className="text-xs px-2 py-1 border border-gray-300 rounded hover:border-red-500 hover:text-red-600 hover:bg-red-50 transition"
-    >
-      {children}
-    </button>
-  );
-}
-
 function ViewBtn({ active, children, onClick }) {
   return (
     <button
@@ -3618,7 +3305,7 @@ function SizeSelect({ label, value, options, onChange }) {
       >
         {options.map((o) => (
           <option key={o} value={o}>
-            {o} mm · {mmToInch(o)} in
+            {o} mm
           </option>
         ))}
       </select>
@@ -3631,7 +3318,6 @@ function SumCell({ label, mm }) {
     <div className="bg-gray-50 border border-gray-200 rounded p-1.5 text-center">
       <div className="text-xs uppercase text-gray-500 font-medium">{label}</div>
       <div className="text-xs font-semibold text-gray-900">{mm}</div>
-      <div className="text-xs text-gray-500">{mmToInch(mm)} in</div>
     </div>
   );
 }
