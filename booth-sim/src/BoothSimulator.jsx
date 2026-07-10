@@ -726,71 +726,6 @@ function warningReasonLabel(reason) {
   return WARNING_REASON_TEXT[reason] || 'Needs placement review';
 }
 
-/* --- Procedural wood-grain texture for shelf boards ---
-   Generates a CanvasTexture that mimics a light maple/birch plywood
-   board (matches the reference wood swatch). Cached as a single shared
-   texture; callers clone it to set their own repeat/rotation so the
-   tiling never looks obviously repeated.                               */
-let _woodTex = null;
-function makeWoodTexture() {
-  if (_woodTex) return _woodTex;
-  const W = 512,
-    H = 256;
-  const cv = document.createElement('canvas');
-  cv.width = W;
-  cv.height = H;
-  const ctx = cv.getContext('2d');
-
-  // base warm wood tone — nearly flat so boards read clean, not striped
-  const base = ctx.createLinearGradient(0, 0, 0, H);
-  base.addColorStop(0, '#d5b988');
-  base.addColorStop(0.5, '#cfb282');
-  base.addColorStop(1, '#d3b686');
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, W, H);
-
-  // deterministic pseudo-random so the texture is stable between renders
-  const rng = ((seed) => () => {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280;
-  })(12345);
-
-  // just a hint of grain — a few very faint strokes so the board isn't a
-  // dead-flat plastic slab, but no obvious "죽죽" stripes.
-  for (let i = 0; i < 8; i++) {
-    const y = rng() * H;
-    const amp = 1 + rng() * 3;
-    const thickness = 0.4 + rng() * 0.6;
-    const darkness = 0.015 + rng() * 0.03;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    for (let x = 0; x <= W; x += 16) {
-      const yy = y + Math.sin((x / W) * Math.PI * (2 + rng() * 3) + i) * amp;
-      ctx.lineTo(x, yy);
-    }
-    ctx.strokeStyle = `rgba(120, 85, 45, ${darkness})`;
-    ctx.lineWidth = thickness;
-    ctx.stroke();
-  }
-
-  // subtle fine noise so flat areas aren't dead-flat
-  const img = ctx.getImageData(0, 0, W, H);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const n = (rng() - 0.5) * 6;
-    img.data[i] = Math.max(0, Math.min(255, img.data[i] + n));
-    img.data[i + 1] = Math.max(0, Math.min(255, img.data[i + 1] + n));
-    img.data[i + 2] = Math.max(0, Math.min(255, img.data[i + 2] + n));
-  }
-  ctx.putImageData(img, 0, 0);
-
-  const tex = new THREE.CanvasTexture(cv);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.minFilter = THREE.LinearFilter;
-  tex.needsUpdate = true;
-  _woodTex = tex;
-  return tex;
-}
 
 /* --- Hole-pattern texture for SPEEDRACK angle posts ---
    SPEEDRACK uses slotted angle steel: a thin L-profile post with a
@@ -880,23 +815,13 @@ function makeMaterials(p, opts = {}) {
     metalness: isWhiteFrame ? 0.08 : 0.35,
     roughness: isWhiteFrame ? 0.62 : 0.55,
   });
+  // Boards are a clean, solid matte color (no grain texture) so they read
+  // smooth instead of striped.
   const board = new THREE.MeshStandardMaterial({
     color: boardHex,
     metalness: 0.05,
-    roughness: isWhiteBoard ? 0.78 : 0.7,
+    roughness: isWhiteBoard ? 0.78 : 0.72,
   });
-  // Wood boards get the procedural grain texture. Each material gets its
-  // own clone so repeat/anisotropy can be tuned per-board in the builder.
-  if (p.boardColor === 'wood') {
-    const wt = makeWoodTexture().clone();
-    wt.wrapS = THREE.RepeatWrapping;
-    wt.wrapT = THREE.RepeatWrapping;
-    wt.repeat.set(1.4, 1); // gentle tiling, grain runs along width
-    wt.anisotropy = 8;
-    wt.needsUpdate = true;
-    board.map = wt;
-    board.color.set(0xffffff); // let the texture supply the color
-  }
   const foot = new THREE.MeshStandardMaterial({
     // Cap color matches frame: white frame → white cap, black frame → black cap.
     // Slightly matte plastic finish so the cap is distinguishable from the
@@ -1382,20 +1307,12 @@ function buildCabinet(group, p, tpl) {
     metalness: 0.15,
     roughness: 0.55,
   });
-  // wood side panels (use the shared wood texture for consistency)
+  // wood side panels — clean solid wood tone (no grain texture)
   const sideMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
+    color: BOARD_COLORS.wood,
     metalness: 0.05,
-    roughness: 0.7,
+    roughness: 0.72,
   });
-  {
-    const wt = makeWoodTexture().clone();
-    wt.wrapS = wt.wrapT = THREE.RepeatWrapping;
-    wt.repeat.set(1, 1);
-    wt.anisotropy = 8;
-    wt.needsUpdate = true;
-    sideMat.map = wt;
-  }
 
   // cabinet top board (wood) — gives the "tabletop" surface
   const topGeo = new THREE.BoxGeometry(bodyW, 0.014, bodyD);
