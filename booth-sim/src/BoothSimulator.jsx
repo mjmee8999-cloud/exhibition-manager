@@ -2040,8 +2040,9 @@ export default function BoothSimulator() {
     return point;
   }, []);
 
-  // Keep a product's center inside the booth so it can never pass through a
-  // wall. Accounts for the product's own footprint (and its rotation).
+  // Stop a product only at the walls that actually exist. If a wall is
+  // removed, the product may leave the booth on that open side.
+  //   왼쪽 벽 = -x, 오른쪽 벽 = +x, 뒤쪽 벽 = -z, 앞쪽(+z)은 항상 열려 있음.
   const clampToBooth = (x, z, p) => {
     const halfBoothW = (booth.width * MM_TO_M) / 2;
     const halfBoothD = (booth.depth * MM_TO_M) / 2;
@@ -2050,10 +2051,13 @@ export default function BoothSimulator() {
     const halfD = ((flat ? p.depth : p.width) * MM_TO_M) / 2;
     const maxX = Math.max(0, halfBoothW - halfW);
     const maxZ = Math.max(0, halfBoothD - halfD);
-    return {
-      x: Math.min(maxX, Math.max(-maxX, x)),
-      z: Math.min(maxZ, Math.max(-maxZ, z)),
-    };
+    const walls = booth.walls || { left: true, back: true, right: true };
+    let cx = x;
+    let cz = z;
+    if (walls.left && cx < -maxX) cx = -maxX; // 왼쪽 벽
+    if (walls.right && cx > maxX) cx = maxX; // 오른쪽 벽
+    if (walls.back && cz < -maxZ) cz = -maxZ; // 뒤쪽 벽
+    return { x: cx, z: cz };
   };
 
   const onCanvasMouseDown = (e) => {
@@ -2427,7 +2431,7 @@ export default function BoothSimulator() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, booth.width, booth.depth]);
+  }, [selectedId, booth.width, booth.depth, booth.walls]);
 
   /* ---------- presets ---------- */
   /* ---------- 벽 개별 세우기/없애기 (왼쪽·뒤쪽·오른쪽) ---------- */
