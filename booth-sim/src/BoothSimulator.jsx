@@ -3483,6 +3483,9 @@ function createOrbitControls(camera, dom) {
     maxDistance: 80,
     minPolarAngle: 0.05,
     maxPolarAngle: Math.PI / 2 - 0.02,
+    // 마우스 감도 (낮을수록 둔함). 회전/이동이 너무 예민하지 않도록 낮춤.
+    rotateSpeed: 0.4,
+    panSpeed: 0.55,
     update() {
       const off = new THREE.Vector3().setFromSpherical(spherical);
       camera.position.copy(target).add(off);
@@ -3526,14 +3529,14 @@ function createOrbitControls(camera, dom) {
     lastY = e.clientY;
     if (mode === 'rotate') {
       const rect = dom.getBoundingClientRect();
-      spherical.theta -= (dx / rect.width) * Math.PI * 2;
-      spherical.phi -= (dy / rect.height) * Math.PI;
+      spherical.theta -= (dx / rect.width) * Math.PI * 2 * ctrl.rotateSpeed;
+      spherical.phi -= (dy / rect.height) * Math.PI * ctrl.rotateSpeed;
       spherical.phi = Math.max(
         ctrl.minPolarAngle,
         Math.min(ctrl.maxPolarAngle, spherical.phi)
       );
     } else {
-      const factor = spherical.radius * 0.0018;
+      const factor = spherical.radius * 0.0018 * ctrl.panSpeed;
       const right = new THREE.Vector3(
         Math.cos(spherical.theta),
         0,
@@ -3556,7 +3559,8 @@ function createOrbitControls(camera, dom) {
   function onWheel(e) {
     if (!ctrl.enabled) return;
     e.preventDefault();
-    const factor = e.deltaY > 0 ? 1.1 : 0.9;
+    // 줌도 한 칸당 변화폭을 줄여 덜 급격하게
+    const factor = e.deltaY > 0 ? 1.06 : 0.94;
     spherical.radius = Math.max(
       ctrl.minDistance,
       Math.min(ctrl.maxDistance, spherical.radius * factor)
