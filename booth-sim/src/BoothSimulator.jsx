@@ -741,11 +741,11 @@ function makeWoodTexture() {
   cv.height = H;
   const ctx = cv.getContext('2d');
 
-  // base warm wood tone
+  // base warm wood tone — nearly flat so boards read clean, not striped
   const base = ctx.createLinearGradient(0, 0, 0, H);
-  base.addColorStop(0, '#d8bd91');
-  base.addColorStop(0.5, '#cdae7e');
-  base.addColorStop(1, '#d4b687');
+  base.addColorStop(0, '#d5b988');
+  base.addColorStop(0.5, '#cfb282');
+  base.addColorStop(1, '#d3b686');
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, W, H);
 
@@ -755,12 +755,13 @@ function makeWoodTexture() {
     return seed / 233280;
   })(12345);
 
-  // horizontal grain lines — long wavy strokes of varying opacity
-  for (let i = 0; i < 70; i++) {
+  // just a hint of grain — a few very faint strokes so the board isn't a
+  // dead-flat plastic slab, but no obvious "죽죽" stripes.
+  for (let i = 0; i < 8; i++) {
     const y = rng() * H;
-    const amp = 2 + rng() * 6;
-    const thickness = 0.5 + rng() * 1.8;
-    const darkness = 0.04 + rng() * 0.16;
+    const amp = 1 + rng() * 3;
+    const thickness = 0.4 + rng() * 0.6;
+    const darkness = 0.015 + rng() * 0.03;
     ctx.beginPath();
     ctx.moveTo(0, y);
     for (let x = 0; x <= W; x += 16) {
@@ -772,23 +773,10 @@ function makeWoodTexture() {
     ctx.stroke();
   }
 
-  // a few darker "cathedral" grain knots for realism
-  for (let i = 0; i < 5; i++) {
-    const cx = rng() * W,
-      cy = rng() * H;
-    const rx = 20 + rng() * 60,
-      ry = 4 + rng() * 10;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(110, 78, 40, ${0.06 + rng() * 0.08})`;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-
   // subtle fine noise so flat areas aren't dead-flat
   const img = ctx.getImageData(0, 0, W, H);
   for (let i = 0; i < img.data.length; i += 4) {
-    const n = (rng() - 0.5) * 12;
+    const n = (rng() - 0.5) * 6;
     img.data[i] = Math.max(0, Math.min(255, img.data[i] + n));
     img.data[i + 1] = Math.max(0, Math.min(255, img.data[i + 1] + n));
     img.data[i + 2] = Math.max(0, Math.min(255, img.data[i + 2] + n));
@@ -1756,7 +1744,6 @@ export default function BoothSimulator() {
   const [layoutName, setLayoutName] = useState('layout1');
   // saved designs library (persisted in localStorage)
   const [savedDesigns, setSavedDesigns] = useState([]);
-  const [showLibrary, setShowLibrary] = useState(false);
   // id of the design currently being worked on (null = never saved yet).
   // Lets Ctrl+S overwrite the same library entry instead of always adding.
   const [currentDesignId, setCurrentDesignId] = useState(null);
@@ -2366,35 +2353,32 @@ export default function BoothSimulator() {
      already have an entry to overwrite.                                 */
   const saveDesign = (opts = {}) => {
     const { silent = false } = opts;
-    // does our tracked id still exist? (it may have been deleted)
-    const existing = currentDesignId
-      ? savedDesigns.find((d) => d.id === currentDesignId)
-      : null;
 
-    if (existing) {
-      // --- overwrite the existing entry, keep its id + name ---
-      const updated = {
-        ...existing,
-        savedAt: new Date().toISOString(),
-        booth: { ...booth },
-        products: products.map((p) => ({ ...p })),
-      };
-      const next = savedDesigns.map((d) =>
-        d.id === existing.id ? updated : d
-      );
-      setSavedDesigns(next);
-      persistDesigns(next);
-      flashSaved(`Saved “${existing.name}”`);
-      return;
+    // Ctrl+S 로 편집 중인(불러온) 디자인이 있으면 조용히 덮어쓰기
+    if (silent) {
+      const existing = currentDesignId
+        ? savedDesigns.find((d) => d.id === currentDesignId)
+        : null;
+      if (existing) {
+        const updated = {
+          ...existing,
+          savedAt: new Date().toISOString(),
+          booth: { ...booth },
+          products: products.map((p) => ({ ...p })),
+        };
+        const next = savedDesigns.map((d) =>
+          d.id === existing.id ? updated : d
+        );
+        setSavedDesigns(next);
+        persistDesigns(next);
+        flashSaved(`“${existing.name}” 저장됨`);
+        return;
+      }
     }
 
-    // --- no existing entry -> create a new one ---
-    // (silent saves still need a name the very first time)
-    const name = window.prompt(
-      'Save design as:',
-      layoutName || 'New Booth Design'
-    );
-    if (!name) return;
+    // 디자인 저장 버튼 → 레이아웃 제목을 입력받아 새 항목으로 저장
+    const name = window.prompt('레이아웃 제목을 입력하세요', layoutName || '새 부스 배치');
+    if (!name || !name.trim()) return;
     const design = {
       id: `d_${Date.now()}`,
       name: name.trim(),
@@ -2406,9 +2390,8 @@ export default function BoothSimulator() {
     setSavedDesigns(next);
     persistDesigns(next);
     setLayoutName(name.trim());
-    setCurrentDesignId(design.id); // track it so future saves overwrite
-    if (!silent) setShowLibrary(true);
-    flashSaved(`Saved “${design.name}”`);
+    setCurrentDesignId(design.id); // 이후 Ctrl+S 는 이 디자인을 덮어써요
+    flashSaved(`“${design.name}” 저장됨`);
   };
 
   const loadDesign = (design) => {
@@ -2435,7 +2418,7 @@ export default function BoothSimulator() {
   const renameDesign = (id) => {
     const design = savedDesigns.find((d) => d.id === id);
     if (!design) return;
-    const newName = window.prompt('Rename design:', design.name);
+    const newName = window.prompt('제목 변경:', design.name);
     if (!newName) return;
     const next = savedDesigns.map((d) =>
       d.id === id ? { ...d, name: newName.trim() } : d
@@ -2568,21 +2551,6 @@ export default function BoothSimulator() {
             })}
           </div>
 
-          {/* 배치 이름 + create new */}
-          <div className="flex items-center gap-1.5 pl-3 border-l border-gray-200">
-            <span className="text-xs uppercase tracking-wider text-gray-500 font-medium">
-              배치
-            </span>
-            <input
-              type="text"
-              value={layoutName}
-              onChange={(e) => setLayoutName(e.target.value)}
-              placeholder="배치 이름"
-              className="text-xs border border-gray-300 rounded px-1.5 py-1 bg-white w-28"
-              title="내보낸 PNG 파일 이름에 사용돼요"
-            />
-          </div>
-
           <div className="flex-1 min-w-0" />
 
           {/* actions */}
@@ -2618,15 +2586,9 @@ export default function BoothSimulator() {
             <div className="w-px h-5 bg-gray-300 mx-1" />
             <IconBtn
               onClick={() => saveDesign()}
-              title="이 부스 디자인을 앱 보관함에 저장"
+              title="현재 부스 배치를 제목을 붙여 저장"
             >
               <Save className="w-3.5 h-3.5" /> 디자인 저장
-            </IconBtn>
-            <IconBtn
-              onClick={() => setShowLibrary((v) => !v)}
-              title="디자인 보관함 열기 / 닫기"
-            >
-              <Layers className="w-3.5 h-3.5" /> 보관함
             </IconBtn>
           </div>
         </div>
@@ -2816,100 +2778,6 @@ export default function BoothSimulator() {
             })()}
         </main>
 
-        {/* DESIGN LIBRARY DRAWER — fixed overlay so it shows regardless of
-            screen width (does not get pushed off-screen by other panels) */}
-        {showLibrary && (
-          <>
-            {/* click-away backdrop */}
-            <div
-              className="fixed inset-0 z-40"
-              style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}
-              onClick={() => setShowLibrary(false)}
-            />
-            <aside className="fixed top-0 right-0 z-50 h-full w-72 border-l border-gray-300 bg-white flex flex-col shadow-xl">
-              <div className="flex-none border-b border-gray-200 px-3 py-2.5 flex items-center justify-between">
-                <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">
-                  디자인 보관함
-                </div>
-                <button
-                  onClick={() => setShowLibrary(false)}
-                  className="text-gray-400 hover:text-gray-700 text-xs"
-                  title="닫기"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="flex-none px-3 py-2 border-b border-gray-200">
-                <button
-                  onClick={() => saveDesign()}
-                  className="w-full inline-flex items-center justify-center gap-1.5 text-xs px-2 py-2 rounded bg-red-600 text-white hover:bg-red-700 transition font-medium"
-                >
-                  <Save className="w-3.5 h-3.5" /> 현재 부스 저장
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                {savedDesigns.length === 0 ? (
-                  <div className="p-6 text-center text-gray-400 text-xs">
-                    아직 저장된 디자인이 없어요.
-                    <br />
-                    "현재 부스 저장"을 누르면 이 배치가 저장돼요.
-                  </div>
-                ) : (
-                  <div className="py-1">
-                    {savedDesigns.map((d) => (
-                      <div
-                        key={d.id}
-                        className="group px-3 py-2 border-b border-gray-100 hover:bg-gray-50"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <button
-                            onClick={() => loadDesign(d)}
-                            className="flex-1 min-w-0 text-left"
-                            title="이 디자인 불러오기"
-                          >
-                            <div className="text-xs font-medium text-gray-900 truncate">
-                              {d.name}
-                            </div>
-                            <div className="text-xs text-gray-400 mt-0.5">
-                              {d.products ? d.products.length : 0} items ·{' '}
-                              {new Date(d.savedAt).toLocaleDateString()}
-                            </div>
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <button
-                            onClick={() => loadDesign(d)}
-                            className="text-xs px-1.5 py-0.5 rounded border border-gray-300 hover:bg-white text-gray-700"
-                          >
-                            불러오기
-                          </button>
-                          <button
-                            onClick={() => renameDesign(d.id)}
-                            className="text-xs px-1.5 py-0.5 rounded border border-gray-300 hover:bg-white text-gray-700"
-                          >
-                            이름 변경
-                          </button>
-                          <button
-                            onClick={() => deleteDesign(d.id)}
-                            className="text-xs px-1.5 py-0.5 rounded border border-gray-300 hover:bg-red-50 hover:border-red-300 text-red-600"
-                          >
-                            삭제
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="flex-none border-t border-gray-200 px-3 py-2 bg-gray-50">
-                <div className="text-xs text-gray-400 leading-snug">
-                  디자인은 이 브라우저에만 저장돼요.
-                </div>
-              </div>
-            </aside>
-          </>
-        )}
-
         {/* RIGHT PANEL */}
         <aside className="flex-none w-80 border-l border-gray-300 bg-white flex flex-col">
           {!selected ? (
@@ -2936,6 +2804,72 @@ export default function BoothSimulator() {
           )}
         </aside>
       </div>
+
+      {/* ===== 디자인 보관함 (시뮬레이터 아래 항상 노출) ===== */}
+      <section className="flex-none border-t border-gray-300 bg-white">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100">
+          <Layers className="w-3.5 h-3.5 text-gray-500" />
+          <span className="text-xs uppercase tracking-wider text-gray-500 font-medium">
+            디자인 보관함
+          </span>
+          <span className="text-xs text-gray-400">
+            {savedDesigns.length}개 저장됨
+          </span>
+          <span className="text-xs text-gray-300">
+            · 「디자인 저장」으로 현재 배치를 제목과 함께 저장할 수 있어요 (이 브라우저에만 저장)
+          </span>
+        </div>
+        {savedDesigns.length === 0 ? (
+          <div className="px-4 py-4 text-xs text-gray-400">
+            아직 저장된 디자인이 없어요. 위쪽의 「디자인 저장」을 누르면 제목을 입력해 저장할 수 있어요.
+          </div>
+        ) : (
+          <div className="flex gap-2 overflow-x-auto px-4 py-3">
+            {savedDesigns.map((d) => (
+              <div
+                key={d.id}
+                className="flex-none w-52 rounded border border-gray-200 hover:border-red-400 hover:shadow-sm transition p-2.5"
+              >
+                <button
+                  onClick={() => loadDesign(d)}
+                  className="w-full text-left"
+                  title="이 디자인 불러오기"
+                >
+                  <div className="text-xs font-medium text-gray-900 truncate">
+                    {d.name}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    물품 {d.products ? d.products.length : 0}개 ·{' '}
+                    {new Date(d.savedAt).toLocaleDateString()}
+                  </div>
+                </button>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <button
+                    onClick={() => loadDesign(d)}
+                    className="flex-1 text-xs px-1.5 py-1 rounded bg-gray-900 text-white hover:bg-gray-700 transition"
+                  >
+                    불러오기
+                  </button>
+                  <button
+                    onClick={() => renameDesign(d.id)}
+                    className="text-xs px-1.5 py-1 rounded border border-gray-300 hover:bg-gray-50 text-gray-700"
+                    title="제목 변경"
+                  >
+                    이름
+                  </button>
+                  <button
+                    onClick={() => deleteDesign(d.id)}
+                    className="text-xs px-1.5 py-1 rounded border border-gray-300 hover:bg-red-50 hover:border-red-300 text-red-600"
+                    title="삭제"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
