@@ -31,6 +31,7 @@ export const phases: Phase[] = [
     emoji: "📝",
     features: [
       { title: "상담일지 작성", desc: "현장 상담 기록 · 명함 저장", href: "/during/consultation" },
+      { title: "현장 사진", desc: "부스 · 전시장 사진 기록", href: "/during/photos" },
     ],
   },
   {

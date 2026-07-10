@@ -128,6 +128,7 @@ export default function ConsultationPage() {
       setForm((prev) => ({
         ...prev,
         companyType: d.companyType || prev.companyType,
+        companyTypeDetail: d.companyTypeDetail || prev.companyTypeDetail,
         homepage: d.homepage || prev.homepage,
         revenue: d.revenue || prev.revenue,
         salesChannels:

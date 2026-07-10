@@ -6,6 +6,17 @@
 const GEMINI_MODEL = "gemini-2.5-flash";
 // 화면의 판매 채널 체크박스와 똑같은 후보들 (AI가 이 중에서만 고르게 함)
 const KNOWN_CHANNELS = ["EC몰", "오프라인 매장", "도매"];
+// 화면의 업체 유형 버튼과 똑같은 후보들 (AI가 이 중에서만 고르게 함)
+const KNOWN_TYPES = [
+  "홈센터",
+  "가구점",
+  "생활용품점",
+  "제조사",
+  "건설·인테리어업체",
+  "서비스업체",
+  "일반고객",
+  "기타",
+];
 
 export async function POST(request: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -33,7 +44,8 @@ export async function POST(request: Request) {
   const prompt =
     `'${company}' 회사를 웹에서 조사해서 아래 JSON 객체 "하나만" 답하라. ` +
     `코드블록·설명 없이 순수 JSON만.\n` +
-    `{"companyType":"업종·규모·특징을 40자 이내 한국어 서술",` +
+    `{"companyType":"${KNOWN_TYPES.join("/")} 중 가장 알맞은 하나(모르면 빈 문자열)",` +
+    `"companyTypeDetail":"세부 업종·규모·특징을 30자 이내 한국어 서술(예: 선반제조, 대형 홈센터 체인)",` +
     `"homepage":"공식 홈페이지 URL(없거나 불확실하면 빈 문자열)",` +
     `"salesChannels":["EC몰","오프라인 매장","도매" 중 해당되는 것만 담은 배열(모르면 빈 배열)],` +
     `"revenue":"가장 최근 연매출을 짧게(예: 약 227조원(2025)). 신뢰할 자료가 없으면 미상"}\n` +
@@ -74,7 +86,10 @@ export async function POST(request: Request) {
       parsed = {};
     }
 
-    const companyType = String(parsed.companyType ?? "").trim();
+    // 업체 유형: 우리가 아는 후보일 때만 채택 (아니면 빈 값)
+    const typeRaw = String(parsed.companyType ?? "").trim();
+    const companyType = KNOWN_TYPES.includes(typeRaw) ? typeRaw : "";
+    const companyTypeDetail = String(parsed.companyTypeDetail ?? "").trim();
     const homepage = String(parsed.homepage ?? "").trim();
 
     // 판매 채널: 우리가 아는 후보만 남깁니다.
@@ -90,7 +105,7 @@ export async function POST(request: Request) {
     }
     const revenue = String(revenueRaw ?? "").trim();
 
-    return Response.json({ data: { companyType, homepage, salesChannels, revenue } });
+    return Response.json({ data: { companyType, companyTypeDetail, homepage, salesChannels, revenue } });
   } catch (err) {
     return Response.json(
       { error: "NETWORK", message: "AI 서버에 연결하지 못했어요.", detail: String(err) },

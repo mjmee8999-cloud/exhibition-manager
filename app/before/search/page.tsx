@@ -161,6 +161,7 @@ export default function SearchPage() {
       city: ex.개최도시명,
       startDate: ex.개최시작예정일자,
       endDate: ex.개최종료예정일자,
+      headcount: "",
       memo,
     });
     if (confirm(`"${ex.해외전시회명.trim()}" 을(를) 내 전시회로 등록했어요.\n전시회 관리로 이동할까요?`)) {
@@ -346,7 +347,7 @@ export default function SearchPage() {
       )}
 
       <p className="mt-8 text-xs text-zinc-400">
-        데이터 출처: 공공데이터포털 · KOTRA/GEP 해외전시회 개최 정보 (연 1회 갱신, 규모·참관인수는 빈 값일 수 있음)
+        데이터 출처: 공공데이터포털 · KOTRA/GEP 해외전시회 개최 정보 (API 사용)
       </p>
     </main>
   );

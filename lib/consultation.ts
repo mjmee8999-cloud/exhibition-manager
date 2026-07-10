@@ -17,7 +17,8 @@ export type Consultation = {
   email: string;
   phone: string;
   // 업체 정보 (직접 입력 또는 AI 자동 조회)
-  companyType: string;
+  companyType: string; // 업체 유형 (아래 COMPANY_TYPES 중 하나)
+  companyTypeDetail: string; // 업체 유형 상세 (예: 제조사 → "선반제조")
   salesChannels: string[];
   salesChannelEtc: string;
   homepage: string;
@@ -40,6 +41,18 @@ export type FormState = Omit<Consultation, "id" | "createdAt" | "cardImage">;
 
 // 여러 항목을 고르는 체크박스 필드 이름들
 export type ListField = "salesChannels" | "interests" | "inquiries";
+
+// 업체 유형 후보 (하나만 선택)
+export const COMPANY_TYPES = [
+  "홈센터",
+  "가구점",
+  "생활용품점",
+  "제조사",
+  "건설·인테리어업체",
+  "서비스업체",
+  "일반고객",
+  "기타",
+];
 
 // 판매 채널 후보
 export const SALES_CHANNELS = ["EC몰", "오프라인 매장", "도매"];
@@ -78,6 +91,7 @@ export const EMPTY_FORM: FormState = {
   email: "",
   phone: "",
   companyType: "",
+  companyTypeDetail: "",
   salesChannels: [],
   salesChannelEtc: "",
   homepage: "",

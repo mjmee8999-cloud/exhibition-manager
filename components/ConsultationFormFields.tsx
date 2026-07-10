@@ -6,6 +6,7 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import {
+  COMPANY_TYPES,
   INQUIRY_GROUPS,
   PRODUCTS,
   SALES_CHANNELS,
@@ -76,19 +77,42 @@ export default function ConsultationFormFields({
           </div>
 
           <div className="mt-5 space-y-4">
-            {/* 업체 유형 (서술형) */}
-            <label className="block">
+            {/* 업체 유형 (선택 + 상세) */}
+            <div>
               <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">
-                업체 유형 <span className="font-normal text-zinc-400">(서술형)</span>
+                업체 유형
               </span>
-              <textarea
-                value={form.companyType}
-                onChange={(e) => setField("companyType", e.target.value)}
-                rows={2}
-                placeholder="예: 미국 대형 홈센터 체인, 주택 개량 자재 소매"
-                className="w-full resize-y rounded-xl border border-black/15 bg-white px-4 py-3 text-base dark:border-white/15 dark:bg-zinc-900"
-              />
-            </label>
+              <div className="flex flex-wrap gap-2.5">
+                {COMPANY_TYPES.map((t) => {
+                  const on = form.companyType === t;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setField("companyType", on ? "" : t)}
+                      className={
+                        "rounded-full border px-4 py-2 text-sm font-medium transition " +
+                        (on
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-black/15 text-zinc-600 hover:border-blue-400 dark:border-white/15 dark:text-zinc-300")
+                      }
+                    >
+                      {on ? "✓ " : ""}
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+              {form.companyType && (
+                <input
+                  type="text"
+                  value={form.companyTypeDetail}
+                  onChange={(e) => setField("companyTypeDetail", e.target.value)}
+                  placeholder={`상세 (예: ${form.companyType === "제조사" ? "선반제조" : "세부 업종·특징"})`}
+                  className="mt-3 w-full rounded-xl border border-black/15 bg-white px-4 py-3 text-base dark:border-white/15 dark:bg-zinc-900 sm:max-w-md"
+                />
+              )}
+            </div>
 
             {/* 판매 채널 (체크박스) */}
             <div>

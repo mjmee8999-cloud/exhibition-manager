@@ -14,6 +14,7 @@ import {
   EMPTY_FORM,
   formatDate,
   joinList,
+  PRODUCTS,
   resizeImage,
   toFormState,
   type Consultation,
@@ -33,6 +34,13 @@ export default function OrganizePage() {
   const [editLookupStatus, setEditLookupStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
   const [editLookupMsg, setEditLookupMsg] = useState("");
   const replaceInputRef = useRef<HTMLInputElement>(null);
+
+  // 검색 · 필터 · 정렬 상태
+  const [query, setQuery] = useState("");
+  const [fImportance, setFImportance] = useState("");
+  const [fInterest, setFInterest] = useState("");
+  const [fProduct, setFProduct] = useState("");
+  const [sortBy, setSortBy] = useState<"recent" | "old" | "importance" | "company">("recent");
 
   useEffect(() => {
     if (!storageKey) {
@@ -121,6 +129,7 @@ export default function OrganizePage() {
       setEditForm((prev) => ({
         ...prev,
         companyType: d.companyType || prev.companyType,
+        companyTypeDetail: d.companyTypeDetail || prev.companyTypeDetail,
         homepage: d.homepage || prev.homepage,
         revenue: d.revenue || prev.revenue,
         salesChannels:
@@ -136,12 +145,61 @@ export default function OrganizePage() {
     }
   }
 
-  // 엑셀(.xlsx) 내려받기
+  // 검색 · 필터 · 정렬 적용
+  const gradeRank = (g: string) => (g === "A" ? 3 : g === "B" ? 2 : g === "C" ? 1 : 0);
+  const filtered = records
+    .filter((r) => {
+      if (fImportance && r.importance !== fImportance) return false;
+      if (fInterest && r.interestLevel !== fInterest) return false;
+      if (fProduct && !(r.interests ?? []).includes(fProduct)) return false;
+      if (query.trim()) {
+        const q = query.trim().toLowerCase();
+        const hay = [
+          r.company,
+          r.name,
+          r.title,
+          r.email,
+          r.phone,
+          r.companyType,
+          r.companyTypeDetail,
+          r.memo,
+          joinList(r.salesChannels, r.salesChannelEtc),
+          joinList(r.interests, r.interestEtc),
+          joinList(r.inquiries, r.inquiryEtc),
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "old") return a.createdAt.localeCompare(b.createdAt);
+      if (sortBy === "company") return (a.company || "").localeCompare(b.company || "", "ko");
+      if (sortBy === "importance") {
+        const d = gradeRank(b.importance) - gradeRank(a.importance);
+        return d !== 0 ? d : b.createdAt.localeCompare(a.createdAt);
+      }
+      return b.createdAt.localeCompare(a.createdAt); // 최신순(기본)
+    });
+
+  const selectCls =
+    "rounded-xl border border-black/15 bg-white px-3 py-2.5 text-sm dark:border-white/15 dark:bg-zinc-900";
+
+  function resetFilters() {
+    setQuery("");
+    setFImportance("");
+    setFInterest("");
+    setFProduct("");
+    setSortBy("recent");
+  }
+
+  // 엑셀(.xlsx) 내려받기 (지금 화면의 필터된 목록을 내보냄)
   async function handleExport() {
-    if (!records.length || !selected) return;
+    if (!filtered.length || !selected) return;
     const XLSX = await import("xlsx");
 
-    const rows = records.map((r, i) => ({
+    const rows = filtered.map((r, i) => ({
       번호: i + 1,
       회사명: r.company,
       담당자: r.name,
@@ -149,6 +207,7 @@ export default function OrganizePage() {
       이메일: r.email,
       연락처: r.phone,
       업체유형: r.companyType,
+      "업체유형 상세": r.companyTypeDetail,
       판매채널: joinList(r.salesChannels, r.salesChannelEtc),
       홈페이지: r.homepage,
       매출액: r.revenue,
@@ -197,7 +256,7 @@ export default function OrganizePage() {
         <button
           type="button"
           onClick={handleExport}
-          disabled={records.length === 0}
+          disabled={filtered.length === 0}
           className="rounded-xl bg-green-600 px-5 py-2.5 text-base font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           ⬇ 엑셀 추출 (.xlsx)
@@ -213,7 +272,9 @@ export default function OrganizePage() {
           {selected.city ? ` · ${selected.city}` : ""}
         </span>
         <span className="ml-auto font-medium text-blue-700 dark:text-blue-300">
-          총 {records.length}건
+          {filtered.length === records.length
+            ? `총 ${records.length}건`
+            : `${filtered.length} / ${records.length}건`}
         </span>
       </div>
 
@@ -229,7 +290,61 @@ export default function OrganizePage() {
         </div>
       ) : (
         <>
+          {/* 검색 · 필터 바 */}
+          <section className="mt-4 space-y-3 rounded-2xl border border-black/10 p-4 dark:border-white/10">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="🔍 회사명 · 담당자 · 이메일 · 연락처 · 메모 등으로 검색"
+              className="w-full rounded-xl border border-black/15 bg-white px-4 py-2.5 text-base dark:border-white/15 dark:bg-zinc-900"
+            />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <select value={fImportance} onChange={(e) => setFImportance(e.target.value)} className={selectCls}>
+                <option value="">중요도 전체</option>
+                <option value="A">중요도 A</option>
+                <option value="B">중요도 B</option>
+                <option value="C">중요도 C</option>
+              </select>
+              <select value={fInterest} onChange={(e) => setFInterest(e.target.value)} className={selectCls}>
+                <option value="">관심도 전체</option>
+                <option value="A">관심도 A</option>
+                <option value="B">관심도 B</option>
+                <option value="C">관심도 C</option>
+              </select>
+              <select value={fProduct} onChange={(e) => setFProduct(e.target.value)} className={selectCls}>
+                <option value="">관심품목 전체</option>
+                {PRODUCTS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className={selectCls}
+              >
+                <option value="recent">최신순</option>
+                <option value="old">오래된순</option>
+                <option value="importance">중요도순</option>
+                <option value="company">회사명순</option>
+              </select>
+            </div>
+            {(query || fImportance || fInterest || fProduct || sortBy !== "recent") && (
+              <button type="button" onClick={resetFilters} className="text-sm text-blue-600 hover:underline">
+                필터 초기화
+              </button>
+            )}
+          </section>
+
           <p className="mt-4 text-sm text-zinc-500">💡 행을 누르면 상세 보기 · 수정 창이 열려요.</p>
+
+          {filtered.length === 0 ? (
+            <div className="mt-3 rounded-2xl border border-dashed border-black/15 p-12 text-center text-zinc-500 dark:border-white/15">
+              검색 · 필터 조건에 맞는 상담일지가 없어요.
+            </div>
+          ) : (
           <div className="mt-3 overflow-x-auto rounded-2xl border border-black/10 dark:border-white/10">
             <table className="w-full border-collapse text-sm">
               <thead>
@@ -252,7 +367,7 @@ export default function OrganizePage() {
                 </tr>
               </thead>
               <tbody>
-                {records.map((r, i) => (
+                {filtered.map((r, i) => (
                   <tr
                     key={r.id}
                     onClick={() => openEdit(r)}
@@ -272,15 +387,20 @@ export default function OrganizePage() {
                     <Td>{r.title || "-"}</Td>
                     <Td>{r.email || "-"}</Td>
                     <Td>{r.phone || "-"}</Td>
-                    <Td className="max-w-[14rem] whitespace-normal">{r.companyType || "-"}</Td>
-                    <Td className="max-w-[10rem] whitespace-normal">
-                      {joinList(r.salesChannels, r.salesChannelEtc) || "-"}
+                    <Td className="max-w-[14rem] whitespace-normal">
+                      {r.companyType || "-"}
+                      {r.companyTypeDetail ? (
+                        <span className="block text-xs text-zinc-400">{r.companyTypeDetail}</span>
+                      ) : null}
                     </Td>
-                    <Td className="max-w-[16rem] whitespace-normal">
-                      {joinList(r.interests, r.interestEtc) || "-"}
+                    <Td className="min-w-[9rem] max-w-[12rem]">
+                      <TagList items={r.salesChannels} etc={r.salesChannelEtc} />
                     </Td>
-                    <Td className="max-w-[16rem] whitespace-normal">
-                      {joinList(r.inquiries, r.inquiryEtc) || "-"}
+                    <Td className="min-w-[11rem] max-w-[16rem]">
+                      <TagList items={r.interests} etc={r.interestEtc} />
+                    </Td>
+                    <Td className="min-w-[11rem] max-w-[18rem]">
+                      <TagList items={r.inquiries} etc={r.inquiryEtc} />
                     </Td>
                     <Td>
                       <GradeBadge grade={r.importance} />
@@ -306,6 +426,7 @@ export default function OrganizePage() {
               </tbody>
             </table>
           </div>
+          )}
         </>
       )}
 
@@ -419,6 +540,26 @@ export default function OrganizePage() {
         </div>
       )}
     </main>
+  );
+}
+
+// 여러 항목을 작은 태그(칩)로 보기 좋게 나열합니다. (표에서 쉼표 나열 대신 사용)
+function TagList({ items, etc }: { items?: string[]; etc?: string }) {
+  const list = [...(items ?? [])];
+  if (etc && etc.trim()) list.push(`기타: ${etc.trim()}`);
+  if (list.length === 0) return <span className="text-zinc-400">-</span>;
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {list.map((t) => (
+        <span
+          key={t}
+          className="rounded-md bg-black/[0.05] px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-white/[0.08] dark:text-zinc-300"
+        >
+          {t}
+        </span>
+      ))}
+    </div>
   );
 }
 
