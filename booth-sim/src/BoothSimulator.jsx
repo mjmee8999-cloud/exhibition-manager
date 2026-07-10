@@ -1355,6 +1355,17 @@ function buildProductMesh(p, tpl) {
   return group;
 }
 
+// 저장된 배치에 쓰인 선반들을 "이름(브랜드)별 개수"로 요약
+function summarizeShelves(products) {
+  const map = new Map();
+  (products || []).forEach((p) => {
+    const brand = p.brand === 'HOMEDANT HOUSE' ? '홈던트하우스' : '스피드랙';
+    const label = `${p.name} · ${brand}`;
+    map.set(label, (map.get(label) || 0) + 1);
+  });
+  return Array.from(map, ([label, count]) => ({ label, count }));
+}
+
 /* ============================================================
    MAIN COMPONENT
    ============================================================ */
@@ -2137,6 +2148,44 @@ export default function BoothSimulator() {
     persistDesigns(next);
   };
 
+  // 이 배치를 "전시품목(Shipment)"으로 저장하고, 상위 앱의 전시품목 페이지로 이동.
+  // 저장은 booth-sim(iframe)과 우리 Next 앱이 같은 도메인이라 localStorage 를 공유해서 가능.
+  const saveShipment = (d) => {
+    try {
+      const KEY = 'booth_shipments';
+      const raw = window.localStorage.getItem(KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      const shipment = {
+        id: `sh_${Date.now()}`,
+        name: d.name,
+        designId: d.id,
+        savedAt: new Date().toISOString(),
+        booth: d.booth ? { ...d.booth } : null,
+        items: (d.products || []).map((p) => ({
+          productId: p.productId,
+          name: p.name,
+          brand: p.brand === 'HOMEDANT HOUSE' ? 'HOMEDANT HOUSE' : 'SPEEDRACK',
+          width: p.width,
+          depth: p.depth,
+          height: p.height,
+          tier: p.tier,
+          frameColor: p.frameColor,
+          boardColor: p.boardColor,
+        })),
+      };
+      window.localStorage.setItem(KEY, JSON.stringify([shipment, ...list]));
+      // 전시품목 페이지로 이동 (iframe 안이면 상위 창을 이동)
+      const target = '/before/shipment';
+      if (window.top && window.top !== window.self) {
+        window.top.location.href = target;
+      } else {
+        window.location.href = target;
+      }
+    } catch (err) {
+      alert('전시품목 저장에 실패했어요: ' + err.message);
+    }
+  };
+
   // keep the ref pointing at the latest saveDesign (closes over current state)
   saveDesignRef.current = saveDesign;
 
@@ -2554,48 +2603,87 @@ export default function BoothSimulator() {
           </div>
         ) : (
           <div className="flex gap-2 overflow-x-auto px-4 py-3">
-            {savedDesigns.map((d) => (
-              <div
-                key={d.id}
-                className="flex-none w-52 rounded border border-gray-200 hover:border-red-400 hover:shadow-sm transition p-2.5"
-              >
-                <button
-                  onClick={() => loadDesign(d)}
-                  className="w-full text-left"
-                  title="이 디자인 불러오기"
+            {savedDesigns.map((d) => {
+              const shelves = summarizeShelves(d.products);
+              const total = d.products ? d.products.length : 0;
+              return (
+                <div
+                  key={d.id}
+                  className="flex-none w-96 rounded border border-gray-200 hover:border-red-400 hover:shadow-sm transition p-2.5 flex gap-3"
                 >
-                  <div className="text-xs font-medium text-gray-900 truncate">
-                    {d.name}
+                  {/* 왼쪽: 이름 + 버튼 */}
+                  <div className="w-44 flex-none flex flex-col">
+                    <button
+                      onClick={() => loadDesign(d)}
+                      className="text-left"
+                      title="이 디자인 불러오기"
+                    >
+                      <div className="text-xs font-medium text-gray-900 truncate">
+                        {d.name}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        선반 {total}개 ·{' '}
+                        {new Date(d.savedAt).toLocaleDateString()}
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <button
+                        onClick={() => loadDesign(d)}
+                        className="flex-1 text-xs px-1.5 py-1 rounded bg-gray-900 text-white hover:bg-gray-700 transition"
+                      >
+                        불러오기
+                      </button>
+                      <button
+                        onClick={() => renameDesign(d.id)}
+                        className="text-xs px-1.5 py-1 rounded border border-gray-300 hover:bg-gray-50 text-gray-700"
+                        title="제목 변경"
+                      >
+                        이름
+                      </button>
+                      <button
+                        onClick={() => deleteDesign(d.id)}
+                        className="text-xs px-1.5 py-1 rounded border border-gray-300 hover:bg-red-50 hover:border-red-300 text-red-600"
+                        title="삭제"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => saveShipment(d)}
+                      className="mt-1.5 text-xs px-1.5 py-1 rounded bg-red-600 text-white hover:bg-red-700 transition font-medium"
+                      title="이 배치의 품목을 전시품목(Shipment)으로 저장하고 이동"
+                    >
+                      전시품목 Shipment로 저장 →
+                    </button>
                   </div>
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    물품 {d.products ? d.products.length : 0}개 ·{' '}
-                    {new Date(d.savedAt).toLocaleDateString()}
+                  {/* 오른쪽: 사용된 선반 목록 */}
+                  <div className="flex-1 min-w-0 border-l border-gray-100 pl-3">
+                    <div className="text-xs text-gray-400 mb-1">
+                      사용된 선반 (총 {total}개)
+                    </div>
+                    {shelves.length === 0 ? (
+                      <div className="text-xs text-gray-300">선반 없음</div>
+                    ) : (
+                      <div className="space-y-0.5 max-h-24 overflow-y-auto pr-1">
+                        {shelves.map((s) => (
+                          <div
+                            key={s.label}
+                            className="flex items-center justify-between gap-2 text-xs"
+                          >
+                            <span className="text-gray-700 truncate">
+                              {s.label}
+                            </span>
+                            <span className="flex-none text-gray-900 font-medium">
+                              ×{s.count}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </button>
-                <div className="flex items-center gap-1.5 mt-2">
-                  <button
-                    onClick={() => loadDesign(d)}
-                    className="flex-1 text-xs px-1.5 py-1 rounded bg-gray-900 text-white hover:bg-gray-700 transition"
-                  >
-                    불러오기
-                  </button>
-                  <button
-                    onClick={() => renameDesign(d.id)}
-                    className="text-xs px-1.5 py-1 rounded border border-gray-300 hover:bg-gray-50 text-gray-700"
-                    title="제목 변경"
-                  >
-                    이름
-                  </button>
-                  <button
-                    onClick={() => deleteDesign(d.id)}
-                    className="text-xs px-1.5 py-1 rounded border border-gray-300 hover:bg-red-50 hover:border-red-300 text-red-600"
-                    title="삭제"
-                  >
-                    삭제
-                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
