@@ -12,7 +12,7 @@ export default function BoothPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">부스 시뮬레이션</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          부스 배치를 미리 시뮬레이션해 봅니다. (승균님 제작 · 한국어판)
+          부스 배치를 미리 시뮬레이션해 봅니다.
         </p>
       </div>
 

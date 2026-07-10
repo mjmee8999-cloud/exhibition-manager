@@ -2042,6 +2042,47 @@ export default function BoothSimulator() {
     return { x: cx, z: cz };
   };
 
+  // 물품의 바닥 footprint 반너비(회전 반영)
+  const halfExtents = (p) => {
+    const flat = (p.rotation || 0) % 180 === 0;
+    return {
+      hx: ((flat ? p.width : p.depth) * MM_TO_M) / 2,
+      hz: ((flat ? p.depth : p.width) * MM_TO_M) / 2,
+    };
+  };
+
+  // 다른 물품과 겹치지 않도록 X→Z 축을 따로 해소한다.
+  // (벽처럼, 막히면 그 축은 멈추고 다른 축으로는 미끄러지듯 이동)
+  const resolveMove = (fromX, fromZ, toX, toZ, m, others) => {
+    const mh = halfExtents(m);
+    let rx = toX;
+    for (const b of others) {
+      const bh = halfExtents(b);
+      // 이번 X 이동이 상대와 Z구간이 겹칠 때만 X를 막는다
+      if (Math.abs(fromZ - b.position.z) >= mh.hz + bh.hz) continue;
+      if (rx > fromX) {
+        const limit = b.position.x - bh.hx - mh.hx; // 상대 왼쪽 면
+        if (fromX <= limit + 1e-6) rx = Math.min(rx, limit);
+      } else if (rx < fromX) {
+        const limit = b.position.x + bh.hx + mh.hx; // 상대 오른쪽 면
+        if (fromX >= limit - 1e-6) rx = Math.max(rx, limit);
+      }
+    }
+    let rz = toZ;
+    for (const b of others) {
+      const bh = halfExtents(b);
+      if (Math.abs(rx - b.position.x) >= mh.hx + bh.hx) continue;
+      if (rz > fromZ) {
+        const limit = b.position.z - bh.hz - mh.hz;
+        if (fromZ <= limit + 1e-6) rz = Math.min(rz, limit);
+      } else if (rz < fromZ) {
+        const limit = b.position.z + bh.hz + mh.hz;
+        if (fromZ >= limit - 1e-6) rz = Math.max(rz, limit);
+      }
+    }
+    return { x: rx, z: rz };
+  };
+
   const onCanvasMouseDown = (e) => {
     if (e.button !== 0) return; // only left click for products
     const id = pickInstanceId(e);
@@ -2075,13 +2116,24 @@ export default function BoothSimulator() {
     if (!floorPt) return;
     const rawX = floorPt.x + drag.offsetX;
     const rawZ = floorPt.z + drag.offsetZ;
-    // keep the product inside the booth walls
     const prod = productsRef.current.find(
       (p) => p.instanceId === drag.instanceId
     );
-    const { x: newX, z: newZ } = prod
-      ? clampToBooth(rawX, rawZ, prod)
-      : { x: rawX, z: rawZ };
+    let newX = rawX;
+    let newZ = rawZ;
+    if (prod) {
+      // 1) 부스 벽 안으로 제한
+      const t = clampToBooth(rawX, rawZ, prod);
+      // 2) 다른 물품과 겹치지 않도록 해소
+      const fromX = drag.lastX !== undefined ? drag.lastX : prod.position.x;
+      const fromZ = drag.lastZ !== undefined ? drag.lastZ : prod.position.z;
+      const others = productsRef.current.filter(
+        (o) => o.instanceId !== prod.instanceId
+      );
+      const r = resolveMove(fromX, fromZ, t.x, t.z, prod, others);
+      newX = r.x;
+      newZ = r.z;
+    }
     // live mesh update for smoothness
     const mesh = meshMapRef.current.get(drag.instanceId);
     if (mesh) {
@@ -2388,10 +2440,21 @@ export default function BoothSimulator() {
       setProducts((prev) =>
         prev.map((p) => {
           if (p.instanceId !== selectedId) return p;
-          const c = clampToBooth(
+          // 벽 안으로 제한한 목표 위치
+          const t = clampToBooth(
             p.position.x + dx * step,
             p.position.z + dz * step,
             p
+          );
+          // 다른 물품과 겹치지 않도록 해소
+          const others = prev.filter((o) => o.instanceId !== selectedId);
+          const c = resolveMove(
+            p.position.x,
+            p.position.z,
+            t.x,
+            t.z,
+            p,
+            others
           );
           return { ...p, position: c };
         })
