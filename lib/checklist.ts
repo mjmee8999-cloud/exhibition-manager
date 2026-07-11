@@ -31,7 +31,7 @@ export const DEFAULT_CHECKLIST: ChecklistPhase[] = [
     groups: [
       {
         id: "g-venue-booth",
-        title: "부스 신청 · 설치",
+        title: "부스 신청",
         items: [
           { id: "b-booth-apply", label: "부스 신청" },
           { id: "b-booth-invoice", label: "부스 인보이스 결제" },
@@ -40,10 +40,10 @@ export const DEFAULT_CHECKLIST: ChecklistPhase[] = [
       },
       {
         id: "g-venue-reg",
-        title: "등록 · 홍보",
+        title: "홍보",
         items: [
-          { id: "b-badge", label: "출입 배지 등록 및 출력" },
-          { id: "b-promo", label: "전시회 개최 홍보", note: "초청 URL 메일 발송 · SNS 홍보" },
+          { id: "b-promo-sns", label: "SNS 홍보" },
+          { id: "b-promo-mail", label: "메일 홍보", note: "초청 URL 메일 발송" },
           { id: "b-site", label: "전시회 사이트 꾸미기", note: "사이트 내 회사 · 부스 정보 입력" },
         ],
       },
@@ -51,8 +51,18 @@ export const DEFAULT_CHECKLIST: ChecklistPhase[] = [
         id: "g-venue-prep",
         title: "현장 준비",
         items: [
+          { id: "b-badge", label: "출입 배지 등록 및 출력" },
           { id: "b-script", label: "상담 멘트 준비", note: "세부 멘트 작성" },
           { id: "b-disposal", label: "폐기 절차 알아보기" },
+        ],
+      },
+      {
+        id: "g-product",
+        title: "전시회 제품",
+        items: [
+          { id: "b-booth-sim", label: "부스 시뮬레이션" },
+          { id: "b-product-list", label: "제품 리스트 확정" },
+          { id: "b-bom", label: "BOM 작성" },
         ],
       },
       {
@@ -60,9 +70,14 @@ export const DEFAULT_CHECKLIST: ChecklistPhase[] = [
         title: "쉽먼트(운송)",
         items: [
           { id: "b-ship-schedule", label: "포워더에 쉽먼트 일정 문의" },
-          { id: "b-ship-list", label: "물품 · 판촉물 리스트 작성", note: "쉽먼트 리스트" },
-          { id: "b-ship-receive", label: "현지 수령 방법 · 일정 확인" },
-          { id: "b-ship-vehicle", label: "차량 출입 확인" },
+          { id: "b-ship-list", label: "물품 및 판촉물 리스트 작성", note: "쉽먼트 리스트" },
+          { id: "b-ship-erp", label: "ERP 내 기타출고 입력 및 물류팀 내용 전달" },
+          { id: "b-ship-docs", label: "선적 서류 작성 및 전달" },
+          {
+            id: "b-ship-receive",
+            label: "현지 수령 방법 일정 확인",
+            note: "전시회 내 차량 출입 방법 및 시간 확인",
+          },
         ],
       },
       {
@@ -89,7 +104,6 @@ export const DEFAULT_CHECKLIST: ChecklistPhase[] = [
         items: [
           { id: "b-transport", label: "현장 교통편 예약", note: "공항 리무진 등" },
           { id: "b-restaurant", label: "식당 예약" },
-          { id: "b-exchange", label: "환전" },
         ],
       },
       {
@@ -109,6 +123,7 @@ export const DEFAULT_CHECKLIST: ChecklistPhase[] = [
             label: "사내 준비물 챙기기",
             note: "노트북 · 충전기 · 모니터 · 종이 상담일지 · 출입 배지",
           },
+          { id: "b-exchange", label: "환전" },
         ],
       },
     ],
@@ -122,9 +137,9 @@ export const DEFAULT_CHECKLIST: ChecklistPhase[] = [
         id: "g-during-setup",
         title: "현장 세팅",
         items: [
-          { id: "d-shipment", label: "전시회 Shipment 수령" },
-          { id: "d-decor", label: "부스 꾸미기" },
+          { id: "d-shipment", label: "전시회 물품 수령" },
           { id: "d-buy-props", label: "소품 구매" },
+          { id: "d-decor", label: "부스 설치" },
         ],
       },
       {

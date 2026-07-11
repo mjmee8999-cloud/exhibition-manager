@@ -18,7 +18,9 @@ import seedData from "@/lib/seedData.json";
 // 앱에 내장된 기본(시연/보고용) 자료입니다.
 //  - 자료를 한 번도 저장한 적 없는 브라우저에서만 자동으로 채워집니다.
 //  - 나중에 데이터베이스를 붙이면 이 부분과 seedData.json을 지우면 돼요.
-const SEED = seedData as {
+// 옛 시드 자료엔 consultDate 같은 새 필드가 없을 수 있어, unknown을 거쳐 형변환합니다.
+// (없는 값은 화면에서 저장시각 등으로 자동 보정돼요.)
+const SEED = seedData as unknown as {
   selectedId: string | null;
   exhibitions: Exhibition[];
   consultations: Record<string, Consultation[]>;

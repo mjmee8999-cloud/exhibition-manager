@@ -13,6 +13,7 @@ import ConsultationFormFields from "@/components/ConsultationFormFields";
 import {
   EMPTY_FORM,
   resizeImage,
+  todayStr,
   type Consultation,
   type FormState,
 } from "@/lib/consultation";
@@ -22,7 +23,7 @@ export default function ConsultationPage() {
 
   const storageKey = selected ? `consultations:${selected.id}` : null;
 
-  const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
+  const [form, setForm] = useState<FormState>({ ...EMPTY_FORM, consultDate: todayStr() });
   const [cardImage, setCardImage] = useState<string>("");
   const [records, setRecords] = useState<Consultation[]>([]);
 
@@ -163,7 +164,7 @@ export default function ConsultationPage() {
   }
 
   function resetForm() {
-    setForm({ ...EMPTY_FORM });
+    setForm({ ...EMPTY_FORM, consultDate: todayStr() });
     setCardImage("");
     setScanStatus("idle");
     setScanMsg("");
@@ -194,7 +195,18 @@ export default function ConsultationPage() {
 
   return (
     <main className="w-full px-8 py-8">
-      <h1 className="text-3xl font-bold tracking-tight">상담일지 작성</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">상담일지 작성</h1>
+        <label className="flex items-center gap-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          📅 상담 일자
+          <input
+            type="date"
+            value={form.consultDate}
+            onChange={(e) => setForm((prev) => ({ ...prev, consultDate: e.target.value }))}
+            className="rounded-xl border border-black/15 bg-white px-3 py-2 text-base text-zinc-900 dark:border-white/15 dark:bg-zinc-900 dark:text-zinc-100"
+          />
+        </label>
+      </div>
 
       {/* 전시회 배너 */}
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-blue-50 px-5 py-3.5 text-base dark:bg-blue-950/40">

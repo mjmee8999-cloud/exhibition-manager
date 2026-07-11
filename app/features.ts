@@ -21,7 +21,7 @@ export const phases: Phase[] = [
     emoji: "📦",
     features: [
       { title: "부스 시뮬레이션", desc: "부스 배치 시뮬레이션", href: "/before/booth" },
-      { title: "전시품목Shipment", desc: "품목 · BOM · 선적서류", href: "/before/shipment" },
+      { title: "전시 품목 리스트", desc: "품목 · BOM", href: "/before/shipment" },
     ],
   },
   {

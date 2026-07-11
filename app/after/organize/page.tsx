@@ -11,6 +11,7 @@ import { useExhibitions } from "@/components/ExhibitionProvider";
 import ConsultationFormFields from "@/components/ConsultationFormFields";
 import { GradeBadge } from "@/components/formControls";
 import {
+  consultationDate,
   EMPTY_FORM,
   formatDate,
   joinList,
@@ -201,6 +202,7 @@ export default function OrganizePage() {
 
     const rows = filtered.map((r, i) => ({
       번호: i + 1,
+      상담일자: consultationDate(r),
       회사명: r.company,
       담당자: r.name,
       "부서/직책": r.title,
@@ -350,6 +352,7 @@ export default function OrganizePage() {
               <thead>
                 <tr className="bg-black/[0.03] text-left dark:bg-white/[0.05]">
                   <Th>#</Th>
+                  <Th>상담일자</Th>
                   <Th>명함</Th>
                   <Th>회사명</Th>
                   <Th>담당자</Th>
@@ -374,6 +377,9 @@ export default function OrganizePage() {
                     className="cursor-pointer border-t border-black/10 align-top hover:bg-blue-50/40 dark:border-white/10 dark:hover:bg-blue-950/20"
                   >
                     <Td>{i + 1}</Td>
+                    <Td className="whitespace-nowrap text-zinc-600 dark:text-zinc-300">
+                      {consultationDate(r) || "-"}
+                    </Td>
                     <Td>
                       {r.cardImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -441,8 +447,17 @@ export default function OrganizePage() {
             className="my-4 w-full max-w-5xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-950 sm:p-8"
           >
             {/* 창 헤더 */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-2xl font-bold">상담일지 상세 · 수정</h2>
+              <label className="ml-auto flex items-center gap-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                📅 상담 일자
+                <input
+                  type="date"
+                  value={editForm.consultDate}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, consultDate: e.target.value }))}
+                  className="rounded-xl border border-black/15 bg-white px-3 py-2 text-base text-zinc-900 dark:border-white/15 dark:bg-zinc-900 dark:text-zinc-100"
+                />
+              </label>
               <button
                 type="button"
                 onClick={closeEdit}

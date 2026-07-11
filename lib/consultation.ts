@@ -10,6 +10,8 @@ export type Consultation = {
   id: string;
   createdAt: string;
   cardImage: string;
+  // 상담 일자 (YYYY-MM-DD, 사용자가 직접 선택 / 기본값은 오늘)
+  consultDate: string;
   // 고객 정보 (명함에서 AI 자동 인식)
   company: string;
   name: string;
@@ -85,6 +87,7 @@ export const INQUIRY_GROUPS = [
 
 // 빈 입력값
 export const EMPTY_FORM: FormState = {
+  consultDate: "",
   company: "",
   name: "",
   title: "",
@@ -105,13 +108,26 @@ export const EMPTY_FORM: FormState = {
   memo: "",
 };
 
+// 오늘 날짜를 YYYY-MM-DD 형식으로 돌려줍니다. (날짜 입력칸 기본값)
+export function todayStr(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// 상담일지의 "상담 일자"를 돌려줍니다.
+// 예전에 저장된 자료엔 consultDate가 없으니, 그럴 땐 저장시각(createdAt)의 날짜로 대신합니다.
+export function consultationDate(c: Consultation): string {
+  return c.consultDate || (c.createdAt ? c.createdAt.slice(0, 10) : "");
+}
+
 // 하나의 상담일지에서 입력값(FormState) 부분만 뽑아냅니다.
 export function toFormState(c: Consultation): FormState {
   const { id: _id, createdAt: _createdAt, cardImage: _cardImage, ...rest } = c;
   void _id;
-  void _createdAt;
   void _cardImage;
-  return rest;
+  // 예전 자료(consultDate 없음)는 저장시각의 날짜로 채워 줍니다.
+  return { ...rest, consultDate: c.consultDate || _createdAt.slice(0, 10) };
 }
 
 // 여러 항목 + 기타를 한 줄 텍스트로 합칩니다. (예: "EC몰, 도매, 기타: 백화점")

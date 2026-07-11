@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
 import { GradeBadge } from "@/components/formControls";
-import { joinList, type Consultation } from "@/lib/consultation";
+import { consultationDate, joinList, type Consultation } from "@/lib/consultation";
 
 export default function DashboardPage() {
   const { selected } = useExhibitions();
@@ -31,6 +31,20 @@ export default function DashboardPage() {
 
   // 데이터 집계 (records 가 바뀔 때만 다시 계산)
   const stats = useMemo(() => summarize(records), [records]);
+
+  // 날짜별 상담 건수 (전시회 기간의 날짜들 + 실제 상담 날짜를 합쳐 시간순 정렬)
+  const dayCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of records) {
+      const d = consultationDate(r);
+      if (d) map.set(d, (map.get(d) ?? 0) + 1);
+    }
+    const days = new Set<string>([
+      ...listDays(selected?.startDate ?? "", selected?.endDate ?? ""),
+      ...map.keys(),
+    ]);
+    return [...days].sort().map((date) => ({ date, count: map.get(date) ?? 0 }));
+  }, [records, selected]);
 
   // ── 전시회 미선택 안내 ──
   if (!selected) {
@@ -86,28 +100,19 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* ── 요약 카드 (KPI) ── */}
+          {/* ── 요약 카드 (KPI) — 총 건수 + 날짜별(일차별) 건수 ── */}
           <section className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <KpiCard label="총 상담 건수" value={stats.total} unit="건" accent="blue" />
-            <KpiCard
-              label="중요도 A (핵심 업체)"
-              value={stats.importanceCount.A}
-              unit="건"
-              accent="red"
-            />
-            <KpiCard
-              label="관심도 A (뜨거운 리드)"
-              value={stats.interestCount.A}
-              unit="건"
-              accent="orange"
-            />
-            <KpiCard
-              label="명함 등록률"
-              value={stats.cardRate}
-              unit="%"
-              accent="green"
-              sub={`${stats.cardCount} / ${stats.total}건`}
-            />
+            {dayCounts.map((d, i) => (
+              <KpiCard
+                key={d.date}
+                label={`${i + 1}일차`}
+                value={d.count}
+                unit="건"
+                accent="green"
+                sub={formatDay(d.date)}
+              />
+            ))}
           </section>
 
           {/* ── 중요도 · 관심도 · 업체유형 분포 (원형) ── */}
@@ -234,6 +239,30 @@ export default function DashboardPage() {
 // ─────────────────────────────────────────────
 
 type RankItem = { label: string; count: number };
+
+// 전시회 시작일~종료일 사이의 모든 날짜(YYYY-MM-DD)를 순서대로 만듭니다.
+function listDays(start: string, end: string): string[] {
+  if (!start) return [];
+  const s = new Date(start + "T00:00:00");
+  const e = new Date((end || start) + "T00:00:00");
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return [];
+  const days: string[] = [];
+  const pad = (n: number) => String(n).padStart(2, "0");
+  // 안전장치: 최대 60일까지만
+  for (let d = new Date(s), i = 0; d <= e && i < 60; d.setDate(d.getDate() + 1), i++) {
+    days.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+  }
+  return days;
+}
+
+// 날짜(YYYY-MM-DD)를 "07.09 (목)" 형태로 보기 좋게 만듭니다.
+function formatDay(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const week = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+  return `${pad(d.getMonth() + 1)}.${pad(d.getDate())} (${week})`;
+}
 
 function summarize(records: Consultation[]) {
   const total = records.length;

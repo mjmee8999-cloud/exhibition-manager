@@ -27,6 +27,13 @@ const HOMEDANT_HOUSE_SIZES = {
   height: [600, 750, 900, 1050, 1200, 1350, 1500, 1650, 1800, 1950, 2100],
 };
 
+// min~max 를 100mm 단위 배열로 만든다.
+const range100 = (min, max) => {
+  const arr = [];
+  for (let v = min; v <= max; v += 100) arr.push(v);
+  return arr;
+};
+
 /* ============================================================
    PRODUCT LIBRARY
    ============================================================ */
@@ -54,7 +61,7 @@ const PRODUCT_LIBRARY = [
     category: 'Rolling Shelf',
     name: '바퀴 선반',
     type: 'rolling',
-    defaultSize: { width: 600, depth: 400, height: 900 },
+    defaultSize: { width: 900, depth: 400, height: 1800 },
     sizeOptions: HOMEDANT_HOUSE_SIZES,
     tierOptions: [2, 3, 4, 5],
     defaultTier: 4,
@@ -68,9 +75,9 @@ const PRODUCT_LIBRARY = [
     category: 'Pegboard Shelf',
     name: '타공 선반',
     type: 'pegboard',
-    defaultSize: { width: 600, depth: 400, height: 1800 },
+    defaultSize: { width: 900, depth: 400, height: 1800 },
     sizeOptions: HOMEDANT_HOUSE_SIZES,
-    tierOptions: [3, 4, 5],
+    tierOptions: [5],
     defaultTier: 5,
     frameColors: ['black', 'white'],
     boardColors: ['wood', 'white'],
@@ -84,8 +91,8 @@ const PRODUCT_LIBRARY = [
     type: 'open_base',
     defaultSize: { width: 900, depth: 400, height: 1800 },
     sizeOptions: HOMEDANT_HOUSE_SIZES,
-    tierOptions: [3, 4, 5],
-    defaultTier: 5,
+    tierOptions: [2, 3],
+    defaultTier: 3,
     frameColors: ['black', 'white'],
     boardColors: ['wood', 'white'],
     addOns: [],
@@ -96,13 +103,154 @@ const PRODUCT_LIBRARY = [
     category: 'Garment Rack',
     name: '행거 선반',
     type: 'garment',
-    defaultSize: { width: 900, depth: 500, height: 1800 },
+    defaultSize: { width: 900, depth: 400, height: 1800 },
     sizeOptions: HOMEDANT_HOUSE_SIZES,
-    tierOptions: [1, 2],
+    tierOptions: [1, 2, 3],
     defaultTier: 2,
     frameColors: ['black', 'white'],
     boardColors: ['wood', 'white'],
     addOns: [],
+  },
+  {
+    id: 'shelf_linked',
+    brand: 'SPEEDRACK', // 내부 기본값(브랜드 숨김이라 의미 없음)
+    category: 'Linked Shelf',
+    name: '연결형 선반',
+    type: 'linked',
+    // 공중에 선반판만 떠 있음. 높이·단 없음(가로·세로만 선택).
+    defaultSize: { width: 900, depth: 400, height: 400 },
+    sizeOptions: { ...HOMEDANT_HOUSE_SIZES, height: [400] },
+    tierOptions: [1],
+    defaultTier: 1,
+    frameColors: [], // 프레임 색상 숨김
+    boardColors: ['wood', 'white'],
+    addOns: [],
+    hideBrand: true,
+    hideHeight: true,
+  },
+  {
+    id: 'shelf_max',
+    brand: 'SPEEDRACK', // 내부 기본값(브랜드 숨김이라 의미 없음)
+    category: 'MAX Rack',
+    name: 'MAX 200/300',
+    type: 'max',
+    // 화이트 철제 선반. 브랜드 구분 없음. 나머지 옵션은 일반 선반과 동일.
+    defaultSize: { width: 900, depth: 400, height: 1800 },
+    sizeOptions: HOMEDANT_HOUSE_SIZES,
+    tierOptions: [3, 4, 5],
+    defaultTier: 4,
+    frameColors: ['white'], // 화이트만
+    boardColors: ['white'], // 화이트 철제
+    addOns: [],
+    hideBrand: true,
+  },
+
+  // ── 소품 (전시회 연출용 — Shipment 품목/BOM에는 안 들어감) ──
+  {
+    id: 'prop_banner',
+    group: 'prop',
+    category: 'Standing Banner',
+    name: '입간판',
+    type: 'banner',
+    defaultSize: { width: 800, depth: 300, height: 2000 },
+    // 가로·세로(깊이)·높이 모두 100mm 단위로 다양하게
+    sizeOptions: {
+      width: range100(400, 1500),
+      depth: range100(200, 600),
+      height: range100(1000, 2500),
+    },
+    tierOptions: [1],
+    defaultTier: 1,
+    frameColors: [],
+    boardColors: [],
+    addOns: [],
+    hideBrand: true,
+  },
+  {
+    id: 'prop_sign',
+    group: 'prop',
+    category: 'Info Sign',
+    name: '설명판',
+    type: 'sign',
+    // 판떄기만 있는 모양. 벽에 붙이는 용도라 마우스로 공중 이동(높이는 위치로 조절).
+    defaultSize: { width: 500, depth: 20, height: 400 },
+    // 가로·세로(판 크기)만 100mm 단위로 다양하게. 두께(depth)는 고정·숨김.
+    sizeOptions: {
+      width: range100(200, 1500),
+      depth: [20],
+      height: range100(200, 1200),
+    },
+    tierOptions: [1],
+    defaultTier: 1,
+    frameColors: [],
+    boardColors: [],
+    addOns: [],
+    hideBrand: true,
+    hideDepth: true, // 두께 선택 숨김
+    heightLabel: '세로', // "높이" 대신 "세로"로 표시
+    floating: true, // 마우스로 공중(상하) 이동 가능
+    hasText: true,
+    defaultText: '',
+  },
+  {
+    id: 'prop_table',
+    group: 'prop',
+    category: 'Table',
+    name: '테이블',
+    type: 'table',
+    defaultSize: { width: 1000, depth: 500, height: 750 },
+    sizeOptions: { width: [600, 800, 1000, 1200], depth: [400, 500, 600], height: [700, 750, 900] },
+    tierOptions: [1],
+    defaultTier: 1,
+    frameColors: [],
+    boardColors: ['wood', 'white'],
+    addOns: [],
+    hideBrand: true,
+  },
+  {
+    id: 'prop_chair',
+    group: 'prop',
+    category: 'Chair',
+    name: '의자',
+    type: 'chair',
+    defaultSize: { width: 450, depth: 450, height: 850 },
+    sizeOptions: { width: [400, 450, 500], depth: [400, 450, 500], height: [800, 850, 900] },
+    tierOptions: [1],
+    defaultTier: 1,
+    frameColors: [],
+    boardColors: ['black', 'white'],
+    addOns: [],
+    hideBrand: true,
+  },
+  {
+    id: 'prop_catalog',
+    group: 'prop',
+    category: 'Catalog Stand',
+    name: '카탈로그 거치대',
+    type: 'catalog',
+    defaultSize: { width: 350, depth: 350, height: 1400 },
+    sizeOptions: { width: [300, 350, 400], depth: [300, 350, 400], height: [1300, 1400, 1500] },
+    tierOptions: [1],
+    defaultTier: 1,
+    frameColors: [],
+    boardColors: ['wood', 'white'],
+    addOns: [],
+    hideBrand: true,
+  },
+  {
+    id: 'prop_tv',
+    group: 'prop',
+    category: 'TV Stand',
+    name: 'TV 스탠드',
+    type: 'tv',
+    defaultSize: { width: 1100, depth: 400, height: 1700 },
+    sizeOptions: { width: [900, 1100, 1300], depth: [400], height: [1600, 1700, 1800] },
+    tierOptions: [1],
+    defaultTier: 1,
+    frameColors: [],
+    boardColors: [],
+    addOns: [],
+    hideBrand: true,
   },
 ];
 
@@ -424,7 +572,8 @@ const fromMM = (mm, unit) => {
    3D MESH BUILDER
    ============================================================ */
 const FRAME_COLORS = { black: 0x2a2a2e, white: 0xffffff };
-const BOARD_COLORS = { wood: 0xc8a877, white: 0xffffff, black: 0x222222 };
+// 우드: 깔끔하고 밝은 내추럴 우드색 (텍스처 없이 단색 매트)
+const BOARD_COLORS = { wood: 0xe4cba0, white: 0xffffff, black: 0x222222 };
 
 /* Human-readable text for each placement-warning reason code.
    Used by the "배치 점검" panel so users see WHY an item is flagged
@@ -739,6 +888,30 @@ function addTierBoards(group, w, d, h, tiers, boardMat, opts = {}) {
   }
 }
 
+// 연결형 선반: 공중에 선반판만 하나 떠 있음 (기둥·단 없음)
+// 높이는 "일반선반(높이 1800)의 3단 기준 선반판" 높이에 맞춘다. (≈ 0.919m)
+function buildLinked(group, p) {
+  const w = p.width * MM_TO_M,
+    d = p.depth * MM_TO_M;
+  const mats = makeMaterials(p, { perforated: false });
+  const thickness = 0.014;
+
+  // 일반선반 선반판 배치식과 동일하게 계산한 3단 기준 높이
+  const refH = 1.8; // 일반선반 높이 1800mm 기준
+  const bottomLift = 0.008,
+    beamH = 0.03,
+    boardT = 0.009;
+  const yBoardBottom = bottomLift + beamH + boardT / 2;
+  const yBoardTop = refH - boardT / 2;
+  const floatY = yBoardBottom + 0.5 * (yBoardTop - yBoardBottom); // 3단 중 가운데 판 ≈ 0.919
+
+  const board = new THREE.Mesh(new THREE.BoxGeometry(w, thickness, d), mats.board);
+  board.position.set(0, floatY, 0);
+  board.castShadow = true;
+  board.receiveShadow = true;
+  group.add(board);
+}
+
 function buildShelf(group, p, tpl) {
   const w = p.width * MM_TO_M,
     d = p.depth * MM_TO_M,
@@ -751,6 +924,54 @@ function buildShelf(group, p, tpl) {
     skipBottom,
     frameMat: mats.frame,
   });
+  addPostFeet(group, w, d, mats.foot, 0.025);
+}
+
+// 하단오픈 선반: 하단은 뻥 비우고(뒤·양옆 프레임만), 선반은 위에서부터 쌓아 내려간다.
+function buildOpenBase(group, p, tpl) {
+  const w = p.width * MM_TO_M,
+    d = p.depth * MM_TO_M,
+    h = p.height * MM_TO_M;
+  const perforated = (p.brand || tpl.brand) === 'SPEEDRACK';
+  const mats = makeMaterials(p, { perforated });
+  addPosts(group, w, d, h, mats.frame, 0.025, { postMat: mats.postMat });
+
+  // --- 선반 판: 맨 위 판부터 아래로 고정 간격(pitch)으로 쌓기 ---
+  const thickness = 0.009;
+  const pitch = 0.35; // 단 사이 간격 (약 350mm)
+  const yTop = h - thickness / 2;
+  const tiers = p.tier || tpl.defaultTier;
+  for (let i = 0; i < tiers; i++) {
+    addBoardWithBeams(group, w, d, yTop - i * pitch, mats.board, mats.frame, {
+      thickness,
+    });
+  }
+
+  // --- 하단 프레임: 뒤 + 양옆만 (앞은 열림, 선반 판 없음) ---
+  const postSize = 0.025;
+  const beamH = 0.03;
+  const beamW = 0.018;
+  const boardW = w - postSize * 2;
+  const boardD = d - postSize * 2;
+  const yLevel = 0.008 + beamH / 2; // 발 바로 위
+  const fbGeo = new THREE.BoxGeometry(boardW, beamH, beamW); // 뒤 빔
+  const lrGeo = new THREE.BoxGeometry(beamW, beamH, boardD - beamW * 2); // 옆 빔
+  const zBack = -d / 2 + postSize + beamW / 2;
+  const xLeft = -w / 2 + postSize + beamW / 2;
+  const xRight = w / 2 - postSize - beamW / 2;
+  const bottomBeams = [
+    [0, yLevel, zBack, fbGeo],
+    [xLeft, yLevel, 0, lrGeo],
+    [xRight, yLevel, 0, lrGeo],
+  ];
+  for (const [bx, by, bz, geo] of bottomBeams) {
+    const m = new THREE.Mesh(geo, mats.frame);
+    m.position.set(bx, by, bz);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    group.add(m);
+  }
+
   addPostFeet(group, w, d, mats.foot, 0.025);
 }
 
@@ -780,7 +1001,73 @@ function buildGarmentRack(group, p, tpl) {
     drop.position.set(bx, h - 0.055, 0);
     group.add(drop);
   });
+  // 옷걸이에 걸린 옷 3벌
+  addHangingClothes(group, w, h);
   addPostFeet(group, w, d, mats.foot, 0.025);
+}
+
+// 행거 봉에 옷걸이 + 옷 3벌을 걸어 준다. (시각용, 치수/BOM엔 영향 없음)
+function makeShirtShape() {
+  const s = new THREE.Shape();
+  const sx = 0.14; // 어깨 반폭
+  const nx = 0.045; // 목 반폭
+  const bx = 0.115; // 몸통 반폭
+  s.moveTo(-nx, 0);
+  s.lineTo(-sx, -0.02); // 어깨
+  s.lineTo(-sx - 0.02, -0.1); // 소매 끝
+  s.lineTo(-bx - 0.005, -0.13);
+  s.lineTo(-bx, -0.16); // 겨드랑이
+  s.lineTo(-bx, -0.62); // 밑단 좌 (기장 길게)
+  s.lineTo(bx, -0.62); // 밑단 우
+  s.lineTo(bx, -0.16);
+  s.lineTo(bx + 0.005, -0.13);
+  s.lineTo(sx + 0.02, -0.1);
+  s.lineTo(sx, -0.02);
+  s.lineTo(nx, 0);
+  s.quadraticCurveTo(0, -0.03, -nx, 0); // 목선
+  return s;
+}
+
+function addHangingClothes(group, w, h) {
+  const barY = h - 0.1; // 행거 봉 높이
+  const clothColors = [0xb23b3b, 0x3f5e8c, 0xcaa96e]; // 붉은 / 파란 / 베이지 옷
+  const shirtGeo = new THREE.ExtrudeGeometry(makeShirtShape(), {
+    depth: 0.05,
+    bevelEnabled: false,
+  });
+  shirtGeo.translate(0, 0, -0.025); // 앞뒤 중앙 정렬
+
+  const hookMat = new THREE.MeshStandardMaterial({
+    color: 0x9a9a9a,
+    metalness: 0.6,
+    roughness: 0.4,
+  });
+  const hookGeo = new THREE.TorusGeometry(0.02, 0.004, 8, 16);
+
+  const count = 3;
+  const gap = Math.min(0.3, w / 2 - 0.18); // 옷끼리 간격 (기둥에 안 닿게)
+  for (let i = 0; i < count; i++) {
+    const x = (i - (count - 1) / 2) * gap;
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: clothColors[i % clothColors.length],
+      roughness: 0.85,
+      metalness: 0.0,
+    });
+    const shirt = new THREE.Mesh(shirtGeo, mat);
+    // 90° 돌려 옆으로(정면에서 옆모습으로) 걸리게 한다
+    shirt.rotation.y = Math.PI / 2;
+    shirt.position.set(x, barY - 0.015, 0);
+    shirt.castShadow = true;
+    shirt.receiveShadow = true;
+    group.add(shirt);
+
+    // 옷걸이 고리 (봉에 걸린 링)
+    const hook = new THREE.Mesh(hookGeo, hookMat);
+    hook.rotation.y = Math.PI / 2;
+    hook.position.set(x, barY, 0);
+    group.add(hook);
+  }
 }
 
 function buildRolling(group, p, tpl) {
@@ -862,44 +1149,52 @@ function buildPegboard(group, p, tpl) {
   const perforated = (p.brand || tpl.brand) === 'SPEEDRACK';
   const mats = makeMaterials(p, { perforated });
   addPosts(group, w, d, h, mats.frame, 0.025, { postMat: mats.postMat });
-  addTierBoards(group, w, d, h, p.tier || tpl.defaultTier, mats.board, {
-    frameMat: mats.frame,
-  });
 
-  // --- pegboard panels mounted in the back, one per open bay ---
-  const isBlack = p.frameColor === 'black';
-  const pegTex = makePegboardTexture(isBlack).clone();
-  pegTex.wrapS = pegTex.wrapT = THREE.RepeatWrapping;
-  pegTex.needsUpdate = true;
-  const panelMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    map: pegTex,
-    metalness: 0.25,
-    roughness: 0.7,
-  });
-
+  // 5단 고정 선반
   const tiers = p.tier || tpl.defaultTier;
-  // place a pegboard panel in each gap between consecutive boards
-  const panelW = w - 0.07;
-  const bayCount = Math.max(1, tiers - 1);
-  // repeat the hole texture proportionally to the panel size
-  pegTex.repeat.set(
-    Math.max(2, Math.round(panelW * 6)),
-    Math.max(2, Math.round((h / bayCount) * 6))
-  );
+  addTierBoards(group, w, d, h, tiers, mats.board, { frameMat: mats.frame });
 
+  // --- 최상단 2개 칸(bay)만 옆·뒤를 솔리드 패널로 막아 수납장처럼 만든다 ---
+  //     (아래 칸들은 뻥 뚫린 오픈 선반)
+  const isBlack = p.frameColor === 'black';
+  const panelHex = isBlack ? 0x303033 : 0xe4e4e4;
+  const panelMat = new THREE.MeshStandardMaterial({
+    color: panelHex,
+    metalness: 0.2,
+    roughness: 0.75,
+  });
+
+  const bayCount = Math.max(1, tiers - 1); // 칸 개수 = 단 수 - 1
   const yBottom = 0.05;
   const yTop = h - 0.05;
-  for (let i = 0; i < bayCount; i++) {
+  const panelW = w - 0.07; // 뒤판 가로
+  const panelD = d - 0.06; // 옆판 깊이
+  const t = 0.006; // 패널 두께
+
+  // 위에서부터 최대 2개의 칸을 막는다
+  const enclosedBays = [bayCount - 1, bayCount - 2].filter((i) => i >= 0);
+  for (const i of enclosedBays) {
     const y0 = yBottom + (i / bayCount) * (yTop - yBottom);
     const y1 = yBottom + ((i + 1) / bayCount) * (yTop - yBottom);
-    const bayH = y1 - y0 - 0.04;
-    const panelGeo = new THREE.BoxGeometry(panelW, bayH, 0.006);
-    const panel = new THREE.Mesh(panelGeo, panelMat);
-    panel.position.set(0, (y0 + y1) / 2, -d / 2 + 0.022);
-    panel.castShadow = true;
-    panel.receiveShadow = true;
-    group.add(panel);
+    // 칸을 다 막지 않고 아래 선반에서 40%만 올라오는 낮은 칸막이
+    const panelH = (y1 - y0) * 0.4;
+    const cy = y0 + panelH / 2 + 0.012; // 아래 선반 바로 위에 얹힘
+
+    // 뒤판
+    const back = new THREE.Mesh(new THREE.BoxGeometry(panelW, panelH, t), panelMat);
+    back.position.set(0, cy, -d / 2 + 0.02);
+    back.castShadow = true;
+    back.receiveShadow = true;
+    group.add(back);
+
+    // 좌·우 옆판
+    for (const sx of [-1, 1]) {
+      const side = new THREE.Mesh(new THREE.BoxGeometry(t, panelH, panelD), panelMat);
+      side.position.set(sx * (w / 2 - 0.02), cy, 0);
+      side.castShadow = true;
+      side.receiveShadow = true;
+      group.add(side);
+    }
   }
   addPostFeet(group, w, d, mats.foot, 0.025);
 }
@@ -1125,27 +1420,114 @@ function buildHeavy(group, p, tpl) {
   addPostFeet(group, w, d, mats.foot, 0.04);
 }
 
+// 흰 판에 그릴 텍스트를 CanvasTexture로 만든다. (aspect = 가로/세로 비율)
+function makeTextTexture(text, aspect) {
+  const H = 512;
+  const W = Math.max(64, Math.round(H * (aspect || 1)));
+  const cv = document.createElement('canvas');
+  cv.width = W;
+  cv.height = H;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  const hasText = !!(text && text.trim());
+  const msg = hasText ? text : '텍스트를 입력하세요';
+  ctx.fillStyle = hasText ? '#1a1a1a' : '#bbbbbb';
+  const fontSize = Math.round(H * 0.11);
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // 줄바꿈: 명시적 \n + 폭 기준 자동 줄바꿈
+  const maxW = W * 0.86;
+  const lines = [];
+  for (const raw of msg.split('\n')) {
+    let cur = '';
+    for (const ch of raw) {
+      const test = cur + ch;
+      if (ctx.measureText(test).width > maxW && cur) {
+        lines.push(cur);
+        cur = ch;
+      } else {
+        cur = test;
+      }
+    }
+    lines.push(cur);
+  }
+  const lineH = fontSize * 1.3;
+  let y = H / 2 - ((lines.length - 1) * lineH) / 2;
+  for (const ln of lines) {
+    ctx.fillText(ln, W / 2, y);
+    y += lineH;
+  }
+
+  const tex = new THREE.CanvasTexture(cv);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// 설명판: 받침 없는 흰색 판떄기 + 사용자가 입력한 텍스트 (앞뒤 양면).
+// 판을 그룹 원점(y=0)에 중심 배치 → 물품의 위치 y(공중 높이)로 자유롭게 띄운다.
+function buildSign(group, p) {
+  const w = p.width * MM_TO_M,
+    h = p.height * MM_TO_M,
+    d = p.depth * MM_TO_M;
+  const thk = Math.max(d, 0.015);
+  // 흰 판 (원점 중심)
+  const panel = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, thk),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92 })
+  );
+  panel.castShadow = true;
+  panel.receiveShadow = true;
+  group.add(panel);
+  // 텍스트 (앞/뒤 양면)
+  const tex = makeTextTexture(p.text, w / h);
+  const textGeo = new THREE.PlaneGeometry(w * 0.94, h * 0.94);
+  const front = new THREE.Mesh(textGeo, new THREE.MeshBasicMaterial({ map: tex }));
+  front.position.set(0, 0, thk / 2 + 0.002);
+  group.add(front);
+  const back = new THREE.Mesh(textGeo, new THREE.MeshBasicMaterial({ map: tex }));
+  back.position.set(0, 0, -thk / 2 - 0.002);
+  back.rotation.y = Math.PI;
+  group.add(back);
+}
+
+// 입간판: 천막(패브릭) 느낌의 세로 배너 (로고 없음)
 function buildBanner(group, p) {
   const w = p.width * MM_TO_M,
-    h = p.height * MM_TO_M;
-  // base
-  const baseGeo = new THREE.BoxGeometry(w, 0.04, p.depth * MM_TO_M);
-  const baseMat = new THREE.MeshStandardMaterial({
-    color: 0x444444,
-    roughness: 0.6,
+    h = p.height * MM_TO_M,
+    d = p.depth * MM_TO_M;
+  const metalMat = new THREE.MeshStandardMaterial({
+    color: 0x666666,
+    metalness: 0.4,
+    roughness: 0.5,
   });
-  const base = new THREE.Mesh(baseGeo, baseMat);
-  base.position.set(0, 0.02, 0);
-  group.add(base);
-  // banner panel
-  const bGeo = new THREE.BoxGeometry(w, h - 0.04, 0.01);
-  const bMat = new THREE.MeshStandardMaterial({
-    color: 0xd64545,
-    roughness: 0.7,
+  // 받침대 (다리)
+  const foot = new THREE.Mesh(new THREE.BoxGeometry(w * 0.55, 0.03, d), metalMat);
+  foot.position.set(0, 0.015, 0);
+  group.add(foot);
+  // 지지 봉 (뒤쪽)
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.014, 0.014, h, 10),
+    metalMat
+  );
+  pole.position.set(0, h / 2, -0.012);
+  group.add(pole);
+  // 천막(패브릭) 패널 — 부드러운 캔버스색, 양면
+  const clothMat = new THREE.MeshStandardMaterial({
+    color: 0xf1ede2,
+    roughness: 0.96,
+    metalness: 0,
+    side: THREE.DoubleSide,
   });
-  const banner = new THREE.Mesh(bGeo, bMat);
-  banner.position.set(0, (h - 0.04) / 2 + 0.04, 0);
-  group.add(banner);
+  const panelH = h * 0.92;
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(w, panelH, 0.005), clothMat);
+  panel.position.set(0, h * 0.5 + h * 0.04, 0);
+  panel.castShadow = true;
+  panel.receiveShadow = true;
+  group.add(panel);
 }
 
 function buildPoster(group, p) {
@@ -1308,7 +1690,13 @@ function buildProductMesh(p, tpl) {
       buildShelf(group, p, tpl);
       break;
     case 'open_base':
+      buildOpenBase(group, p, tpl);
+      break;
+    case 'max':
       buildShelf(group, p, tpl);
+      break;
+    case 'linked':
+      buildLinked(group, p, tpl);
       break;
     case 'heavy':
       buildHeavy(group, p, tpl);
@@ -1333,6 +1721,9 @@ function buildProductMesh(p, tpl) {
       break;
     case 'banner':
       buildBanner(group, p);
+      break;
+    case 'sign':
+      buildSign(group, p);
       break;
     case 'poster':
       buildPoster(group, p);
@@ -1391,6 +1782,8 @@ export default function BoothSimulator() {
   const [currentDesignId, setCurrentDesignId] = useState(null);
   // brief "Saved ✓" confirmation shown after a save
   const [saveStatus, setSaveStatus] = useState('');
+  // 물품 보관함 탭: 'shelf'(선반) | 'prop'(소품)
+  const [libTab, setLibTab] = useState('shelf');
 
   // ----- refs (Three.js handles) -----
   const mountRef = useRef(null);
@@ -1431,7 +1824,8 @@ export default function BoothSimulator() {
       0.1,
       200
     );
-    camera.position.set(8, 6, 8);
+    // 기본 시점: 정면에서 살짝 위로 올라와 내려다보며, 살짝 줌아웃한 위치
+    camera.position.set(0, 4.5, 12);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({
@@ -1615,7 +2009,7 @@ export default function BoothSimulator() {
       const tpl = PRODUCT_LIBRARY.find((t) => t.id === p.productId);
       if (!tpl) return;
       let mesh = map.get(p.instanceId);
-      const fingerprint = `${p.width}-${p.depth}-${p.height}-${p.tier}-${p.frameColor}-${p.boardColor}-${p.brand}`;
+      const fingerprint = `${p.width}-${p.depth}-${p.height}-${p.tier}-${p.frameColor}-${p.boardColor}-${p.brand}-${p.text || ''}`;
       if (!mesh || mesh.userData.fingerprint !== fingerprint) {
         if (mesh) {
           group.remove(mesh);
@@ -1632,15 +2026,18 @@ export default function BoothSimulator() {
         map.set(p.instanceId, mesh);
       }
       // update transform
-      mesh.position.set(p.position.x, 0, p.position.z);
+      mesh.position.set(p.position.x, p.position.y || 0, p.position.z);
       mesh.rotation.y = ((p.rotation || 0) * Math.PI) / 180;
     });
 
     // compute warnings
     const w = (booth.width * MM_TO_M) / 2;
     const d = (booth.depth * MM_TO_M) / 2;
+    // 벽에 붙이는 판(설명판 등)은 겹쳐도 되고 공중에 있어 점검에서 제외
+    const isFloating = (p) => !!tplOf(p)?.floating;
     const newWarn = {};
     products.forEach((p) => {
+      if (isFloating(p)) return;
       const halfW =
         ((p.rotation % 180 === 0 ? p.width : p.depth) * MM_TO_M) / 2;
       const halfD =
@@ -1658,6 +2055,7 @@ export default function BoothSimulator() {
       for (let j = i + 1; j < products.length; j++) {
         const a = products[i],
           b = products[j];
+        if (isFloating(a) || isFloating(b)) continue;
         const aw = ((a.rotation % 180 === 0 ? a.width : a.depth) * MM_TO_M) / 2;
         const ad = ((a.rotation % 180 === 0 ? a.depth : a.width) * MM_TO_M) / 2;
         const bw = ((b.rotation % 180 === 0 ? b.width : b.depth) * MM_TO_M) / 2;
@@ -1765,6 +2163,26 @@ export default function BoothSimulator() {
     return point;
   }, []);
 
+  // 마우스 위치를 "z=zPlane 인 수직 평면" 위의 점으로 변환 (공중 이동용)
+  const getVerticalPoint = useCallback((event, zPlane) => {
+    const renderer = rendererRef.current;
+    const camera = cameraRef.current;
+    if (!renderer || !camera) return null;
+    const rect = renderer.domElement.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera({ x, y }, camera);
+    // 평면 z = zPlane  →  normal(0,0,1), constant = -zPlane
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -zPlane);
+    const point = new THREE.Vector3();
+    ray.ray.intersectPlane(plane, point);
+    return point;
+  }, []);
+
+  // 물품 템플릿 조회
+  const tplOf = (p) => PRODUCT_LIBRARY.find((t) => t.id === p.productId);
+
   // Stop a product only at the walls that actually exist. If a wall is
   // removed, the product may leave the booth on that open side.
   //   왼쪽 벽 = -x, 오른쪽 벽 = +x, 뒤쪽 벽 = -z, 앞쪽(+z)은 항상 열려 있음.
@@ -1836,16 +2254,34 @@ export default function BoothSimulator() {
       setSelectedId(id);
       const product = productsRef.current.find((p) => p.instanceId === id);
       if (!product) return;
-      const floorPt = getFloorPoint(e);
-      if (!floorPt) return;
-      dragRef.current = {
-        instanceId: id,
-        offsetX: product.position.x - floorPt.x,
-        offsetZ: product.position.z - floorPt.z,
-        startClientX: e.clientX,
-        startClientY: e.clientY,
-        moved: false,
-      };
+      const floating = !!tplOf(product)?.floating;
+      if (floating) {
+        // 공중 이동: z 는 고정, x·y 를 수직 평면에서 잡는다
+        const zPlane = product.position.z;
+        const vp = getVerticalPoint(e, zPlane);
+        if (!vp) return;
+        dragRef.current = {
+          instanceId: id,
+          floating: true,
+          zPlane,
+          offsetX: product.position.x - vp.x,
+          offsetY: (product.position.y || 0) - vp.y,
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+          moved: false,
+        };
+      } else {
+        const floorPt = getFloorPoint(e);
+        if (!floorPt) return;
+        dragRef.current = {
+          instanceId: id,
+          offsetX: product.position.x - floorPt.x,
+          offsetZ: product.position.z - floorPt.z,
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+          moved: false,
+        };
+      }
       controlsRef.current.enabled = false;
       e.stopPropagation();
     }
@@ -1858,6 +2294,33 @@ export default function BoothSimulator() {
     const dy = Math.abs(e.clientY - drag.startClientY);
     if (!drag.moved && dx + dy < 4) return;
     drag.moved = true;
+
+    // 공중 이동(설명판 등): x(좌우) · y(상하) 만 이동, z 고정
+    if (drag.floating) {
+      const vp = getVerticalPoint(e, drag.zPlane);
+      if (!vp) return;
+      const prod = productsRef.current.find(
+        (p) => p.instanceId === drag.instanceId
+      );
+      const halfBoothW = (booth.width * MM_TO_M) / 2;
+      const wallH = booth.wallHeight * MM_TO_M;
+      const halfW = prod ? (prod.width * MM_TO_M) / 2 : 0;
+      const halfH = prod ? (prod.height * MM_TO_M) / 2 : 0;
+      let nx = vp.x + drag.offsetX;
+      let ny = vp.y + drag.offsetY;
+      nx = Math.max(-halfBoothW + halfW, Math.min(halfBoothW - halfW, nx));
+      ny = Math.max(halfH + 0.02, Math.min(wallH - halfH, ny));
+      const mesh = meshMapRef.current.get(drag.instanceId);
+      if (mesh) {
+        mesh.position.x = nx;
+        mesh.position.y = ny;
+      }
+      drag.lastX = nx;
+      drag.lastY = ny;
+      drag.lastZ = drag.zPlane;
+      return;
+    }
+
     const floorPt = getFloorPoint(e);
     if (!floorPt) return;
     const rawX = floorPt.x + drag.offsetX;
@@ -1874,7 +2337,7 @@ export default function BoothSimulator() {
       const fromX = drag.lastX !== undefined ? drag.lastX : prod.position.x;
       const fromZ = drag.lastZ !== undefined ? drag.lastZ : prod.position.z;
       const others = productsRef.current.filter(
-        (o) => o.instanceId !== prod.instanceId
+        (o) => o.instanceId !== prod.instanceId && !tplOf(o)?.floating
       );
       const r = resolveMove(fromX, fromZ, t.x, t.z, prod, others);
       newX = r.x;
@@ -1897,7 +2360,12 @@ export default function BoothSimulator() {
         setProducts((prev) =>
           prev.map((p) =>
             p.instanceId === drag.instanceId
-              ? { ...p, position: { x: drag.lastX, z: drag.lastZ } }
+              ? {
+                  ...p,
+                  position: drag.floating
+                    ? { x: drag.lastX, z: drag.lastZ, y: drag.lastY }
+                    : { x: drag.lastX, z: drag.lastZ },
+                }
               : p
           )
         );
@@ -1937,7 +2405,15 @@ export default function BoothSimulator() {
         tier: Math.max(...tpl.tierOptions),
         frameColor: tpl.frameColors[0],
         boardColor: tpl.boardColors[0],
-        position: { x: placeX, z: placeZ },
+        text: tpl.defaultText || '', // 설명판 등 문구 입력용
+        // floating(설명판): 뒷벽 근처에 공중(y≈1.3m)으로 띄워서 시작
+        position: tpl.floating
+          ? {
+              x: placeX,
+              z: -(booth.depth * MM_TO_M) / 2 + 0.15,
+              y: 1.3,
+            }
+          : { x: placeX, z: placeZ },
         rotation: 0,
         addOns: [],
       };
@@ -2159,7 +2635,13 @@ export default function BoothSimulator() {
         designId: d.id,
         savedAt: new Date().toISOString(),
         booth: d.booth ? { ...d.booth } : null,
-        items: (d.products || []).map((p) => ({
+        // 소품은 BOM 대상이 아니라 품목 목록에서 제외 (선반만)
+        items: (d.products || [])
+          .filter((p) => {
+            const t = PRODUCT_LIBRARY.find((x) => x.id === p.productId);
+            return (t?.group || 'shelf') === 'shelf';
+          })
+          .map((p) => ({
           productId: p.productId,
           name: p.name,
           brand: p.brand === 'HOMEDANT HOUSE' ? 'HOMEDANT HOUSE' : 'SPEEDRACK',
@@ -2231,8 +2713,10 @@ export default function BoothSimulator() {
             p.position.z + dz * step,
             p
           );
-          // 다른 물품과 겹치지 않도록 해소
-          const others = prev.filter((o) => o.instanceId !== selectedId);
+          // 다른 물품과 겹치지 않도록 해소 (설명판 등 벽 부착물은 무시)
+          const others = prev.filter(
+            (o) => o.instanceId !== selectedId && !tplOf(o)?.floating
+          );
           const c = resolveMove(
             p.position.x,
             p.position.z,
@@ -2241,7 +2725,8 @@ export default function BoothSimulator() {
             p,
             others
           );
-          return { ...p, position: c };
+          // y(공중 높이)는 유지
+          return { ...p, position: { ...p.position, ...c } };
         })
       );
     };
@@ -2379,6 +2864,7 @@ export default function BoothSimulator() {
             <IconBtn
               onClick={() => saveDesign()}
               title="현재 부스 배치를 제목을 붙여 저장"
+              primary
             >
               <Save className="w-3.5 h-3.5" /> 디자인 저장
             </IconBtn>
@@ -2394,13 +2880,35 @@ export default function BoothSimulator() {
             <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">
               물품 보관함
             </div>
-            <div className="text-xs text-gray-400 mt-1">
-              선반을 클릭해 부스에 추가하세요. 스피드랙·홈던트하우스는 물품 선택 후
-              오른쪽에서 바꿀 수 있어요.
+            {/* 선반 / 소품 탭 */}
+            <div className="mt-2 grid grid-cols-2 gap-1">
+              {[
+                ['shelf', '선반'],
+                ['prop', '소품'],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setLibTab(key)}
+                  className={`text-xs py-1.5 rounded border transition ${
+                    libTab === key
+                      ? 'border-red-500 bg-red-50 text-red-700 font-semibold'
+                      : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="text-xs text-gray-400 mt-2">
+              {libTab === 'shelf'
+                ? '선반을 클릭해 부스에 추가하세요. 스피드랙·홈던트하우스는 오른쪽에서 바꿀 수 있어요.'
+                : '연출용 소품이에요. (전시품목 Shipment 목록에는 안 들어가요.)'}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
-            {PRODUCT_LIBRARY.map((tpl) => (
+            {PRODUCT_LIBRARY.filter(
+              (tpl) => (tpl.group || 'shelf') === libTab
+            ).map((tpl) => (
               <button
                 key={tpl.id}
                 onClick={() => addProduct(tpl)}
@@ -2413,22 +2921,14 @@ export default function BoothSimulator() {
                       {tpl.name}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {tpl.defaultSize.width}×{tpl.defaultSize.depth}×
-                      {tpl.defaultSize.height}mm
+                      {tpl.defaultSize.width}×{tpl.defaultSize.depth}
+                      {tpl.hideHeight ? '' : `×${tpl.defaultSize.height}`}mm
                     </div>
                   </div>
                   <Plus className="w-3.5 h-3.5 text-gray-300 group-hover:text-red-600" />
                 </div>
               </button>
             ))}
-          </div>
-          <div className="flex-none border-t border-gray-200 px-3 py-3 bg-white flex items-center justify-center">
-            <img
-              src={HOMEDANT_LOGO_URL}
-              alt="HOMEDANT"
-              className="h-20 w-auto"
-              style={{ objectFit: 'contain' }}
-            />
           </div>
           <div className="flex-none border-t border-gray-200 px-3 py-2 bg-gray-50">
             <div className="text-xs text-gray-500">
@@ -2601,77 +3101,58 @@ export default function BoothSimulator() {
             아직 저장된 디자인이 없어요. 위쪽의 「디자인 저장」을 누르면 제목을 입력해 저장할 수 있어요.
           </div>
         ) : (
-          <div className="flex gap-2 overflow-x-auto px-4 py-3">
+          <div className="flex flex-col gap-2 px-4 py-2 max-h-52 overflow-y-auto">
             {savedDesigns.map((d) => {
-              const shelves = summarizeShelves(d.products);
-              const total = d.products ? d.products.length : 0;
+              const all = d.products || [];
+              const shelfList = all.filter(
+                (p) => (tplOf(p)?.group || 'shelf') === 'shelf'
+              );
+              const propList = all.filter(
+                (p) => (tplOf(p)?.group || 'shelf') === 'prop'
+              );
+              const shelves = summarizeShelves(shelfList);
+              // 소품은 이름만으로 집계 (브랜드 구분 없음)
+              const propMap = new Map();
+              propList.forEach((p) =>
+                propMap.set(p.name, (propMap.get(p.name) || 0) + 1)
+              );
+              const props = [...propMap.entries()].map(([label, count]) => ({
+                label,
+                count,
+              }));
               return (
                 <div
                   key={d.id}
-                  className="flex-none w-96 rounded border border-gray-200 hover:border-red-400 hover:shadow-sm transition p-2.5 flex gap-3"
+                  className="w-full rounded border border-gray-200 hover:border-red-400 hover:shadow-sm transition p-2.5 flex items-start gap-3"
                 >
-                  {/* 왼쪽: 이름 + 버튼 */}
-                  <div className="w-44 flex-none flex flex-col">
-                    <button
-                      onClick={() => loadDesign(d)}
-                      className="text-left"
-                      title="이 디자인 불러오기"
-                    >
-                      <div className="text-xs font-medium text-gray-900 truncate">
-                        {d.name}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        선반 {total}개 ·{' '}
-                        {new Date(d.savedAt).toLocaleDateString()}
-                      </div>
-                    </button>
-                    <div className="flex items-center gap-1.5 mt-2">
-                      <button
-                        onClick={() => loadDesign(d)}
-                        className="flex-1 text-xs px-1.5 py-1 rounded bg-gray-900 text-white hover:bg-gray-700 transition"
-                      >
-                        불러오기
-                      </button>
-                      <button
-                        onClick={() => renameDesign(d.id)}
-                        className="text-xs px-1.5 py-1 rounded border border-gray-300 hover:bg-gray-50 text-gray-700"
-                        title="제목 변경"
-                      >
-                        이름
-                      </button>
-                      <button
-                        onClick={() => deleteDesign(d.id)}
-                        className="text-xs px-1.5 py-1 rounded border border-gray-300 hover:bg-red-50 hover:border-red-300 text-red-600"
-                        title="삭제"
-                      >
-                        삭제
-                      </button>
+                  {/* 이름 · 날짜 */}
+                  <div className="w-40 flex-none">
+                    <div className="text-sm font-medium text-gray-900 truncate">
+                      {d.name}
                     </div>
-                    <button
-                      onClick={() => saveShipment(d)}
-                      className="mt-1.5 text-xs px-1.5 py-1 rounded bg-red-600 text-white hover:bg-red-700 transition font-medium"
-                      title="이 배치의 품목을 전시품목(Shipment)으로 저장하고 이동"
-                    >
-                      전시품목 Shipment로 저장 →
-                    </button>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      선반 {shelfList.length}개 · 소품 {propList.length}개
+                    </div>
+                    <div className="text-xs text-gray-300 mt-0.5">
+                      {new Date(d.savedAt).toLocaleDateString()}
+                    </div>
                   </div>
-                  {/* 오른쪽: 사용된 선반 목록 */}
-                  <div className="flex-1 min-w-0 border-l border-gray-100 pl-3">
+
+                  {/* 사용된 선반 */}
+                  <div className="w-44 flex-none min-w-0 border-l border-gray-100 pl-3">
                     <div className="text-xs text-gray-400 mb-1">
-                      사용된 선반 (총 {total}개)
+                      사용된 선반 ({shelfList.length}개)
                     </div>
                     {shelves.length === 0 ? (
-                      <div className="text-xs text-gray-300">선반 없음</div>
+                      <div className="text-xs text-gray-300">없음</div>
                     ) : (
-                      <div className="space-y-0.5 max-h-24 overflow-y-auto pr-1">
+                      <div className="space-y-0.5 max-h-16 overflow-y-auto pr-1">
                         {shelves.map((s) => (
                           <div
                             key={s.label}
                             className="flex items-center justify-between gap-2 text-xs"
                           >
-                            <span className="text-gray-700 truncate">
-                              {s.label}
-                            </span>
+                            <span className="text-gray-700 truncate">{s.label}</span>
                             <span className="flex-none text-gray-900 font-medium">
                               ×{s.count}
                             </span>
@@ -2679,6 +3160,55 @@ export default function BoothSimulator() {
                         ))}
                       </div>
                     )}
+                  </div>
+
+                  {/* 사용된 소품 */}
+                  <div className="w-44 flex-none min-w-0 border-l border-gray-100 pl-3">
+                    <div className="text-xs text-gray-400 mb-1">
+                      사용된 소품 ({propList.length}개)
+                    </div>
+                    {props.length === 0 ? (
+                      <div className="text-xs text-gray-300">없음</div>
+                    ) : (
+                      <div className="space-y-0.5 max-h-16 overflow-y-auto pr-1">
+                        {props.map((s) => (
+                          <div
+                            key={s.label}
+                            className="flex items-center justify-between gap-2 text-xs"
+                          >
+                            <span className="text-gray-700 truncate">{s.label}</span>
+                            <span className="flex-none text-gray-900 font-medium">
+                              ×{s.count}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 버튼 (일렬) — Shipment 반영을 파랑·크게 강조 */}
+                  <div className="ml-auto flex-none flex items-center gap-2 border-l border-gray-100 pl-3">
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        onClick={() => loadDesign(d)}
+                        className="text-xs px-2.5 py-1.5 rounded border border-gray-300 hover:bg-gray-50 text-gray-700"
+                      >
+                        불러오기
+                      </button>
+                      <button
+                        onClick={() => deleteDesign(d.id)}
+                        className="text-xs px-2.5 py-1.5 rounded border border-gray-300 hover:bg-red-50 hover:border-red-300 text-red-600"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => saveShipment(d)}
+                      className="text-sm px-6 py-4 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition font-bold shadow-md ring-2 ring-blue-300 hover:scale-[1.03]"
+                      title="이 배치의 품목을 전시 품목 리스트에 반영하고 이동"
+                    >
+                      전시 품목 리스트 반영 →
+                    </button>
                   </div>
                 </div>
               );
@@ -2709,9 +3239,6 @@ function PropertyPanel({
   const zMin = (-boothSize.d * MM_TO_M) / 2;
   const zMax = (boothSize.d * MM_TO_M) / 2;
 
-  // Look up a rendering image for the right-side preview. May be null.
-  const refImg = findRenderImage(product, tpl);
-
   return (
     <div className="flex-1 overflow-y-auto">
       {/* header */}
@@ -2719,9 +3246,11 @@ function PropertyPanel({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="text-xs uppercase tracking-wider text-gray-500 font-medium">
-              {(product.brand || tpl.brand) === 'SPEEDRACK'
-                ? '스피드랙'
-                : '홈던트하우스'}
+              {tpl.hideBrand
+                ? tpl.category
+                : (product.brand || tpl.brand) === 'SPEEDRACK'
+                  ? '스피드랙'
+                  : '홈던트하우스'}
             </div>
             <div className="font-semibold text-sm leading-tight mt-0.5 truncate">
               {product.name}
@@ -2740,79 +3269,45 @@ function PropertyPanel({
         </div>
       </div>
 
-      {/* reference image preview (rendering image vs current setting) */}
+      {/* 현재 설정 정보 (참고 이미지는 사용자 요청으로 표시하지 않음) */}
       <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-        <div
-          className="w-full h-32 rounded border border-gray-200 flex items-center justify-center overflow-hidden mb-2"
-          style={{ backgroundColor: '#ffffff' }}
-        >
-          {refImg && refImg.url ? (
-            <img
-              src={refImg.url}
-              alt={tpl.name}
-              className="max-h-full max-w-full object-contain"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-              }}
-            />
-          ) : (
-            <div className="text-center px-2">
-              <ProductThumb type={tpl.type} />
-              <div className="text-xs text-gray-400 mt-1">
-                참고 이미지 없음
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="text-xs space-y-0.5 leading-tight">
-          {refImg ? (
-            <div className="text-gray-500">
-              <span className="text-gray-400">참고 이미지: </span>
-              {refImg.width && refImg.depth && refImg.height
-                ? `${refImg.width}×${refImg.depth}×${refImg.height}`
-                : '—'}
-              {refImg.tier ? ` / ${refImg.tier}단` : ''}
-              {refImg.color ? ` / ${refImg.color}` : ''}
-            </div>
-          ) : (
-            <div className="text-gray-400">참고 이미지: 없음</div>
-          )}
-          <div className="text-gray-900 font-medium">
-            <span className="text-gray-400 font-normal">현재 설정: </span>
-            {product.width}×{product.depth}×{product.height}
-            {product.tier ? ` / ${product.tier}단` : ''}
-            {product.frameColor ? ` / ${product.frameColor}` : ''}
-          </div>
+        <div className="text-xs leading-tight text-gray-900 font-medium">
+          <span className="text-gray-400 font-normal">현재 설정: </span>
+          {product.width}×{product.depth}×{product.height}
+          {product.tier ? ` / ${product.tier}단` : ''}
+          {product.frameColor ? ` / ${product.frameColor}` : ''}
         </div>
       </div>
 
-      {/* 브랜드 선택 (스피드랙 = 프레임 기둥 타공) */}
-      <Section title="브랜드">
-        <div className="grid grid-cols-2 gap-1">
-          {[
-            ['SPEEDRACK', '스피드랙'],
-            ['HOMEDANT HOUSE', '홈던트하우스'],
-          ].map(([key, label]) => {
-            const active = (product.brand || tpl.brand) === key;
-            return (
-              <button
-                key={key}
-                onClick={() => update({ brand: key })}
-                className={`text-xs py-1.5 px-2 rounded border transition ${
-                  active
-                    ? 'border-red-500 bg-red-50 text-red-700 font-medium'
-                    : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="text-xs text-gray-400 mt-1.5 leading-snug">
-          스피드랙은 프레임 기둥에 타공(구멍)이 있어요.
-        </div>
-      </Section>
+      {/* 브랜드 선택 (스피드랙 = 프레임 기둥 타공) — 일부 제품은 브랜드 구분 없음 */}
+      {!tpl.hideBrand && (
+        <Section title="브랜드">
+          <div className="grid grid-cols-2 gap-1">
+            {[
+              ['SPEEDRACK', '스피드랙'],
+              ['HOMEDANT HOUSE', '홈던트하우스'],
+            ].map(([key, label]) => {
+              const active = (product.brand || tpl.brand) === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => update({ brand: key })}
+                  className={`text-xs py-1.5 px-2 rounded border transition ${
+                    active
+                      ? 'border-red-500 bg-red-50 text-red-700 font-medium'
+                      : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-xs text-gray-400 mt-1.5 leading-snug">
+            스피드랙은 프레임 기둥에 타공(구멍)이 있어요.
+          </div>
+        </Section>
+      )}
 
       {/* dimensions */}
       <Section title="크기">
@@ -2822,18 +3317,27 @@ function PropertyPanel({
           options={tpl.sizeOptions.width}
           onChange={(v) => update({ width: v })}
         />
-        <SizeSelect
-          label="세로(깊이)"
-          value={product.depth}
-          options={tpl.sizeOptions.depth}
-          onChange={(v) => update({ depth: v })}
-        />
-        <SizeSelect
-          label="높이"
-          value={product.height}
-          options={tpl.sizeOptions.height}
-          onChange={(v) => update({ height: v })}
-        />
+        {!tpl.hideDepth && (
+          <SizeSelect
+            label="세로(깊이)"
+            value={product.depth}
+            options={tpl.sizeOptions.depth}
+            onChange={(v) => update({ depth: v })}
+          />
+        )}
+        {!tpl.hideHeight && (
+          <SizeSelect
+            label={tpl.heightLabel || '높이'}
+            value={product.height}
+            options={tpl.sizeOptions.height}
+            onChange={(v) => update({ height: v })}
+          />
+        )}
+        {tpl.floating && (
+          <div className="text-xs text-blue-600 mt-1 leading-snug">
+            💡 마우스로 드래그하면 공중(상하)·좌우로 옮길 수 있어요. (벽에 붙이는 판)
+          </div>
+        )}
         {tpl.tierOptions.length > 1 && (
           <Field label="단">
             <select
@@ -2851,43 +3355,62 @@ function PropertyPanel({
         )}
       </Section>
 
-      {/* colors */}
-      <Section title="색상">
-        <Field label="프레임">
-          <div className="flex gap-1.5">
-            {tpl.frameColors.map((c) => (
-              <button
-                key={c}
-                onClick={() => update({ frameColor: c })}
-                className={`flex-1 text-xs py-1.5 rounded border transition ${
-                  product.frameColor === c
-                    ? 'border-gray-900 bg-gray-900 text-white'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </Field>
-        <Field label="선반판">
-          <div className="flex gap-1.5">
-            {tpl.boardColors.map((c) => (
-              <button
-                key={c}
-                onClick={() => update({ boardColor: c })}
-                className={`flex-1 text-xs py-1.5 rounded border transition ${
-                  product.boardColor === c
-                    ? 'border-gray-900 bg-gray-900 text-white'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </Field>
-      </Section>
+      {/* 문구 입력 (설명판 등) */}
+      {tpl.hasText && (
+        <Section title="문구">
+          <textarea
+            value={product.text || ''}
+            onChange={(e) => update({ text: e.target.value })}
+            rows={3}
+            placeholder="판에 표시할 텍스트를 입력하세요 (줄바꿈 가능)"
+            className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 resize-y"
+          />
+        </Section>
+      )}
+
+      {/* colors — 선택지가 2개 이상인 항목만 표시(1개면 자동 확정) */}
+      {(tpl.frameColors.length > 1 || tpl.boardColors.length > 1) && (
+        <Section title="색상">
+          {tpl.frameColors.length > 1 && (
+            <Field label="프레임">
+              <div className="flex gap-1.5">
+                {tpl.frameColors.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => update({ frameColor: c })}
+                    className={`flex-1 text-xs py-1.5 rounded border transition ${
+                      product.frameColor === c
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
+          {tpl.boardColors.length > 1 && (
+            <Field label="선반판">
+              <div className="flex gap-1.5">
+                {tpl.boardColors.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => update({ boardColor: c })}
+                    className={`flex-1 text-xs py-1.5 rounded border transition ${
+                      product.boardColor === c
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
+        </Section>
+      )}
 
       {/* position */}
       <Section title="위치 · 회전">
@@ -2929,18 +3452,39 @@ function PropertyPanel({
             Range {zMin.toFixed(2)} ↔ {zMax.toFixed(2)}
           </div>
         </Field>
-        <Field label="회전">
+        <Field label="회전 (1° 단위)">
           <div className="flex items-center gap-2">
-            <div className="flex-1 text-xs px-2 py-1 border border-gray-300 rounded bg-gray-50">
-              {product.rotation || 0}°
-            </div>
+            <input
+              type="number"
+              min={0}
+              max={359}
+              value={product.rotation || 0}
+              onChange={(e) => {
+                let v = parseInt(e.target.value, 10);
+                if (Number.isNaN(v)) v = 0;
+                v = ((v % 360) + 360) % 360; // 0~359 로 정규화
+                update({ rotation: v });
+              }}
+              className="w-16 text-xs px-2 py-1 border border-gray-300 rounded bg-white text-right"
+            />
+            <span className="text-xs text-gray-400">°</span>
             <button
               onClick={rotate}
-              className="text-xs px-2.5 py-1 border border-gray-300 rounded hover:bg-gray-50 inline-flex items-center gap-1"
+              className="ml-auto text-xs px-2.5 py-1 border border-gray-300 rounded hover:bg-gray-50 inline-flex items-center gap-1"
+              title="90도씩 회전"
             >
               <RotateCw className="w-3 h-3" /> +90°
             </button>
           </div>
+          <input
+            type="range"
+            min={0}
+            max={359}
+            step={1}
+            value={product.rotation || 0}
+            onChange={(e) => update({ rotation: parseInt(e.target.value, 10) })}
+            className="mt-2 w-full"
+          />
         </Field>
       </Section>
 
@@ -3014,12 +3558,16 @@ function ViewBtn({ active, children, onClick }) {
   );
 }
 
-function IconBtn({ children, onClick, title }) {
+function IconBtn({ children, onClick, title, primary }) {
   return (
     <button
       onClick={onClick}
       title={title}
-      className="inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded border border-gray-300 hover:bg-gray-50 transition"
+      className={
+        primary
+          ? 'inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded border border-blue-600 bg-blue-600 text-white font-semibold hover:bg-blue-700 transition'
+          : 'inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded border border-gray-300 hover:bg-gray-50 transition'
+      }
     >
       {children}
     </button>
@@ -3104,7 +3652,7 @@ function ProductThumb({ type, tpl, product }) {
   // tiny SVG thumbnail per type
   const common = 'w-7 h-7 flex-none';
   const stroke = '#444';
-  if (type === 'shelf' || type === 'open_base' || type === 'heavy') {
+  if (type === 'shelf' || type === 'open_base' || type === 'heavy' || type === 'max') {
     return (
       <svg
         viewBox="0 0 24 24"
@@ -3117,6 +3665,20 @@ function ProductThumb({ type, tpl, product }) {
         <line x1="5" y1="9" x2="19" y2="9" />
         <line x1="5" y1="14" x2="19" y2="14" />
         {type !== 'open_base' && <line x1="5" y1="19" x2="19" y2="19" />}
+      </svg>
+    );
+  }
+  if (type === 'linked') {
+    // 공중에 떠 있는 선반판 하나
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={common}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.4"
+      >
+        <rect x="4" y="10" width="16" height="4" rx="0.5" />
       </svg>
     );
   }
@@ -3228,6 +3790,22 @@ function ProductThumb({ type, tpl, product }) {
         <rect x="5" y="4" width="14" height="14" rx="0.5" />
         <line x1="5" y1="22" x2="5" y2="18" />
         <line x1="19" y1="22" x2="19" y2="18" />
+      </svg>
+    );
+  }
+  if (type === 'sign') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={common}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.4"
+      >
+        <rect x="4" y="5" width="16" height="11" rx="0.5" />
+        <line x1="7" y1="9" x2="17" y2="9" />
+        <line x1="7" y1="12" x2="14" y2="12" />
+        <line x1="12" y1="16" x2="12" y2="21" />
       </svg>
     );
   }
