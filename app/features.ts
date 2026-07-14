@@ -40,7 +40,7 @@ export const phases: Phase[] = [
     features: [
       { title: "명함 및 상담일지 정리", desc: "명함 · 상담 내용 정리", href: "/after/organize" },
       { title: "실적 대시보드", desc: "전시회 성과 한눈에 보기", href: "/after/dashboard" },
-      { title: "후속 대응 자료", desc: "사후 팔로업 자료 준비", href: "/after/followup" },
+      { title: "후속 대응 자료", desc: "팔로업 메일 자동 생성", href: "/after/followup" },
     ],
   },
 ];

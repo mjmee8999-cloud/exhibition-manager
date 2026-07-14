@@ -134,13 +134,13 @@ const PRODUCT_LIBRARY = [
     category: 'MAX Rack',
     name: 'MAX 200/300',
     type: 'max',
-    // 화이트 철제 선반. 브랜드 구분 없음. 나머지 옵션은 일반 선반과 동일.
+    // 은색 철제 선반. 브랜드 구분 없음. 나머지 옵션은 일반 선반과 동일.
     defaultSize: { width: 900, depth: 400, height: 1800 },
     sizeOptions: HOMEDANT_HOUSE_SIZES,
     tierOptions: [3, 4, 5],
     defaultTier: 4,
-    frameColors: ['white'], // 화이트만
-    boardColors: ['white'], // 화이트 철제
+    frameColors: ['silver'], // 은색(금속)만
+    boardColors: ['silver'], // 은색 철제
     addOns: [],
     hideBrand: true,
   },
@@ -198,7 +198,7 @@ const PRODUCT_LIBRARY = [
     category: 'Table',
     name: '테이블',
     type: 'table',
-    defaultSize: { width: 1000, depth: 500, height: 750 },
+    defaultSize: { width: 900, depth: 900, height: 750 },
     sizeOptions: { width: [600, 800, 1000, 1200], depth: [400, 500, 600], height: [700, 750, 900] },
     tierOptions: [1],
     defaultTier: 1,
@@ -206,6 +206,9 @@ const PRODUCT_LIBRARY = [
     boardColors: ['wood', 'white'],
     addOns: [],
     hideBrand: true,
+    // 모양 선택: 원형/사각 (기본 원형 — 카페형 상담 테이블)
+    hasShape: true,
+    defaultShape: 'round',
   },
   {
     id: 'prop_chair',
@@ -245,6 +248,46 @@ const PRODUCT_LIBRARY = [
     type: 'tv',
     defaultSize: { width: 1100, depth: 400, height: 1700 },
     sizeOptions: { width: [900, 1100, 1300], depth: [400], height: [1600, 1700, 1800] },
+    tierOptions: [1],
+    defaultTier: 1,
+    frameColors: [],
+    boardColors: [],
+    addOns: [],
+    hideBrand: true,
+  },
+  {
+    id: 'prop_counter',
+    group: 'prop',
+    category: 'Counter',
+    name: '카운터',
+    type: 'counter',
+    // 앞이 막힌 리셉션/상담 카운터
+    defaultSize: { width: 1200, depth: 500, height: 1050 },
+    sizeOptions: {
+      width: range100(800, 2000),
+      depth: range100(400, 700),
+      height: range100(900, 1200),
+    },
+    tierOptions: [1],
+    defaultTier: 1,
+    frameColors: [],
+    boardColors: ['wood', 'white', 'black'],
+    addOns: [],
+    hideBrand: true,
+  },
+  {
+    id: 'prop_electric',
+    group: 'prop',
+    category: 'Electric Box',
+    name: '전기박스',
+    type: 'electric',
+    // 바닥에 두는 회색 분전함(전원 박스)
+    defaultSize: { width: 300, depth: 200, height: 450 },
+    sizeOptions: {
+      width: range100(200, 600),
+      depth: range100(150, 400),
+      height: range100(300, 900),
+    },
     tierOptions: [1],
     defaultTier: 1,
     frameColors: [],
@@ -571,9 +614,9 @@ const fromMM = (mm, unit) => {
 /* ============================================================
    3D MESH BUILDER
    ============================================================ */
-const FRAME_COLORS = { black: 0x2a2a2e, white: 0xffffff };
+const FRAME_COLORS = { black: 0x2a2a2e, white: 0xffffff, silver: 0xc7c9cc };
 // 우드: 깔끔하고 밝은 내추럴 우드색 (텍스처 없이 단색 매트)
-const BOARD_COLORS = { wood: 0xe4cba0, white: 0xffffff, black: 0x222222 };
+const BOARD_COLORS = { wood: 0xe4cba0, white: 0xffffff, black: 0x222222, silver: 0xcfd1d4 };
 
 /* Human-readable text for each placement-warning reason code.
    Used by the "배치 점검" panel so users see WHY an item is flagged
@@ -671,20 +714,24 @@ function makeMaterials(p, opts = {}) {
   const boardHex = BOARD_COLORS[p.boardColor] || 0xb89968;
   const isWhiteFrame = p.frameColor === 'white';
   const isWhiteBoard = p.boardColor === 'white';
+  const isSilverFrame = p.frameColor === 'silver';
+  const isSilverBoard = p.boardColor === 'silver';
 
   // White paint: low metalness + higher roughness so directional light
   // creates visible shading instead of a perfectly flat white blob.
+  // Silver: 낮은 metalness + 밝은 회색 → 환경맵 없이도 어느 각도서나 은색으로
+  // 보임(metalness를 높이면 반사할 배경이 없어 정면이 검게 보이는 문제 방지).
   const frame = new THREE.MeshStandardMaterial({
     color: frameHex,
-    metalness: isWhiteFrame ? 0.08 : 0.35,
-    roughness: isWhiteFrame ? 0.62 : 0.55,
+    metalness: isSilverFrame ? 0.25 : isWhiteFrame ? 0.08 : 0.35,
+    roughness: isSilverFrame ? 0.5 : isWhiteFrame ? 0.62 : 0.55,
   });
   // Boards are a clean, solid matte color (no grain texture) so they read
   // smooth instead of striped.
   const board = new THREE.MeshStandardMaterial({
     color: boardHex,
-    metalness: 0.05,
-    roughness: isWhiteBoard ? 0.78 : 0.72,
+    metalness: isSilverBoard ? 0.25 : 0.05,
+    roughness: isSilverBoard ? 0.5 : isWhiteBoard ? 0.78 : 0.72,
   });
   const foot = new THREE.MeshStandardMaterial({
     // Cap color matches frame: white frame → white cap, black frame → black cap.
@@ -1570,23 +1617,153 @@ function buildTable(group, p) {
     color: BOARD_COLORS[p.boardColor] || 0xa07853,
     roughness: 0.8,
   });
+  const thk = 0.03;
+
+  // 원형(타원) 테이블 — 중앙 기둥 + 원반 받침 (카페형)
+  if (p.shape === 'round') {
+    const top = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.5, 0.5, thk, 48),
+      topMat
+    );
+    top.scale.set(w, 1, d); // 가로·세로에 맞춰 지름 조절(타원 가능)
+    top.position.set(0, h - thk / 2, 0);
+    top.castShadow = true;
+    top.receiveShadow = true;
+    group.add(top);
+    // 중앙 기둥
+    const poleH = h - thk;
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.04, poleH, 16),
+      legMat
+    );
+    pole.position.set(0, poleH / 2, 0);
+    pole.castShadow = true;
+    group.add(pole);
+    // 바닥 원반 받침
+    const baseR = Math.min(w, d) * 0.32;
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(baseR, baseR, 0.02, 28),
+      legMat
+    );
+    base.position.set(0, 0.01, 0);
+    base.receiveShadow = true;
+    group.add(base);
+    return;
+  }
+
+  // 사각 테이블 — 다리 4개 + 사각 상판
   const legSize = 0.04;
-  const legGeo = new THREE.BoxGeometry(legSize, h - 0.03, legSize);
+  const legGeo = new THREE.BoxGeometry(legSize, h - thk, legSize);
   const positions = [
-    [-w / 2 + legSize, (h - 0.03) / 2, -d / 2 + legSize],
-    [w / 2 - legSize, (h - 0.03) / 2, -d / 2 + legSize],
-    [-w / 2 + legSize, (h - 0.03) / 2, d / 2 - legSize],
-    [w / 2 - legSize, (h - 0.03) / 2, d / 2 - legSize],
+    [-w / 2 + legSize, (h - thk) / 2, -d / 2 + legSize],
+    [w / 2 - legSize, (h - thk) / 2, -d / 2 + legSize],
+    [-w / 2 + legSize, (h - thk) / 2, d / 2 - legSize],
+    [w / 2 - legSize, (h - thk) / 2, d / 2 - legSize],
   ];
   positions.forEach((pos) => {
     const m = new THREE.Mesh(legGeo, legMat);
     m.position.set(pos[0], pos[1], pos[2]);
     group.add(m);
   });
-  const topGeo = new THREE.BoxGeometry(w, 0.03, d);
+  const topGeo = new THREE.BoxGeometry(w, thk, d);
   const top = new THREE.Mesh(topGeo, topMat);
-  top.position.set(0, h - 0.015, 0);
+  top.position.set(0, h - thk / 2, 0);
   group.add(top);
+}
+
+// 카운터(리셉션/상담 데스크) — 앞이 막힌 박스 + 상판 오버행
+function buildCounter(group, p) {
+  const w = p.width * MM_TO_M,
+    h = p.height * MM_TO_M,
+    d = p.depth * MM_TO_M;
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: BOARD_COLORS[p.boardColor] || 0xffffff,
+    roughness: 0.85,
+  });
+  const topMat = new THREE.MeshStandardMaterial({
+    color: 0x555555,
+    roughness: 0.6,
+    metalness: 0.2,
+  });
+  const topThk = 0.04;
+  const bodyH = h - topThk;
+  // 몸통 (앞이 막힌 박스)
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, bodyH, d), bodyMat);
+  body.position.set(0, bodyH / 2, 0);
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+  // 상판 (살짝 넓게 오버행)
+  const top = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.06, topThk, d + 0.06),
+    topMat
+  );
+  top.position.set(0, bodyH + topThk / 2, 0);
+  top.castShadow = true;
+  group.add(top);
+  // 앞면 허리 몰딩 (장식 라인)
+  const trim = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.006, 0.02, d + 0.006),
+    topMat
+  );
+  trim.position.set(0, bodyH * 0.55, 0);
+  group.add(trim);
+}
+
+// 전기박스(분전함) — 바닥에 두는 회색 금속함, 앞면에 문·콘센트
+function buildElectricBox(group, p) {
+  const w = p.width * MM_TO_M,
+    h = p.height * MM_TO_M,
+    d = p.depth * MM_TO_M;
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: 0x9aa0a6,
+    metalness: 0.6,
+    roughness: 0.5,
+  });
+  const doorMat = new THREE.MeshStandardMaterial({
+    color: 0x7f858b,
+    metalness: 0.5,
+    roughness: 0.55,
+  });
+  const darkMat = new THREE.MeshStandardMaterial({
+    color: 0x2a2c2f,
+    roughness: 0.7,
+  });
+  const front = d / 2; // 앞면 z 좌표
+  // 몸통
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), bodyMat);
+  body.position.set(0, h / 2, 0);
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+  // 앞면 문 패널 (살짝 튀어나옴)
+  const door = new THREE.Mesh(
+    new THREE.BoxGeometry(w * 0.82, h * 0.78, 0.012),
+    doorMat
+  );
+  door.position.set(0, h * 0.52, front + 0.006);
+  group.add(door);
+  // 손잡이
+  const handle = new THREE.Mesh(
+    new THREE.BoxGeometry(0.02, h * 0.16, 0.02),
+    darkMat
+  );
+  handle.position.set(w * 0.3, h * 0.52, front + 0.02);
+  group.add(handle);
+  // 콘센트 2개 (앞면 위쪽)
+  const outletGeo = new THREE.BoxGeometry(w * 0.16, w * 0.16, 0.01);
+  [-w * 0.2, w * 0.05].forEach((ox) => {
+    const outlet = new THREE.Mesh(outletGeo, darkMat);
+    outlet.position.set(ox, h * 0.8, front + 0.013);
+    group.add(outlet);
+  });
+  // 경고 라벨(노란 사각)
+  const label = new THREE.Mesh(
+    new THREE.BoxGeometry(w * 0.22, h * 0.1, 0.005),
+    new THREE.MeshStandardMaterial({ color: 0xf5c518, roughness: 0.8 })
+  );
+  label.position.set(-w * 0.22, h * 0.28, front + 0.013);
+  group.add(label);
 }
 
 function buildChair(group, p) {
@@ -1739,6 +1916,12 @@ function buildProductMesh(p, tpl) {
       break;
     case 'tv':
       buildTVStand(group, p);
+      break;
+    case 'counter':
+      buildCounter(group, p);
+      break;
+    case 'electric':
+      buildElectricBox(group, p);
       break;
     default:
       buildShelf(group, p, tpl);
@@ -2009,7 +2192,7 @@ export default function BoothSimulator() {
       const tpl = PRODUCT_LIBRARY.find((t) => t.id === p.productId);
       if (!tpl) return;
       let mesh = map.get(p.instanceId);
-      const fingerprint = `${p.width}-${p.depth}-${p.height}-${p.tier}-${p.frameColor}-${p.boardColor}-${p.brand}-${p.text || ''}`;
+      const fingerprint = `${p.width}-${p.depth}-${p.height}-${p.tier}-${p.frameColor}-${p.boardColor}-${p.brand}-${p.text || ''}-${p.shape || ''}`;
       if (!mesh || mesh.userData.fingerprint !== fingerprint) {
         if (mesh) {
           group.remove(mesh);
@@ -2406,6 +2589,7 @@ export default function BoothSimulator() {
         frameColor: tpl.frameColors[0],
         boardColor: tpl.boardColors[0],
         text: tpl.defaultText || '', // 설명판 등 문구 입력용
+        shape: tpl.defaultShape || 'rect', // 테이블 등 모양(원형/사각)
         // floating(설명판): 뒷벽 근처에 공중(y≈1.3m)으로 띄워서 시작
         position: tpl.floating
           ? {
@@ -3309,30 +3493,77 @@ function PropertyPanel({
         </Section>
       )}
 
-      {/* dimensions */}
+      {/* dimensions — 소품(prop)은 드롭다운 대신 mm 직접 입력 */}
       <Section title="크기">
-        <SizeSelect
-          label="가로(폭)"
-          value={product.width}
-          options={tpl.sizeOptions.width}
-          onChange={(v) => update({ width: v })}
-        />
-        {!tpl.hideDepth && (
+        {tpl.hasShape && (
+          <Field label="모양">
+            <div className="flex gap-1.5">
+              {[
+                ['round', '원형'],
+                ['rect', '사각'],
+              ].map(([key, lbl]) => {
+                const active = (product.shape || tpl.defaultShape) === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => update({ shape: key })}
+                    className={`flex-1 text-xs py-1.5 rounded border transition ${
+                      active
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {lbl}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+        )}
+        {tpl.group === 'prop' ? (
+          <SizeInput
+            label="가로(폭)"
+            value={product.width}
+            onChange={(v) => update({ width: v })}
+          />
+        ) : (
           <SizeSelect
-            label="세로(깊이)"
-            value={product.depth}
-            options={tpl.sizeOptions.depth}
-            onChange={(v) => update({ depth: v })}
+            label="가로(폭)"
+            value={product.width}
+            options={tpl.sizeOptions.width}
+            onChange={(v) => update({ width: v })}
           />
         )}
-        {!tpl.hideHeight && (
-          <SizeSelect
-            label={tpl.heightLabel || '높이'}
-            value={product.height}
-            options={tpl.sizeOptions.height}
-            onChange={(v) => update({ height: v })}
-          />
-        )}
+        {!tpl.hideDepth &&
+          (tpl.group === 'prop' ? (
+            <SizeInput
+              label="세로(깊이)"
+              value={product.depth}
+              onChange={(v) => update({ depth: v })}
+            />
+          ) : (
+            <SizeSelect
+              label="세로(깊이)"
+              value={product.depth}
+              options={tpl.sizeOptions.depth}
+              onChange={(v) => update({ depth: v })}
+            />
+          ))}
+        {!tpl.hideHeight &&
+          (tpl.group === 'prop' ? (
+            <SizeInput
+              label={tpl.heightLabel || '높이'}
+              value={product.height}
+              onChange={(v) => update({ height: v })}
+            />
+          ) : (
+            <SizeSelect
+              label={tpl.heightLabel || '높이'}
+              value={product.height}
+              options={tpl.sizeOptions.height}
+              onChange={(v) => update({ height: v })}
+            />
+          ))}
         {tpl.floating && (
           <div className="text-xs text-blue-600 mt-1 leading-snug">
             💡 마우스로 드래그하면 공중(상하)·좌우로 옮길 수 있어요. (벽에 붙이는 판)
@@ -3612,6 +3843,35 @@ function SizeSelect({ label, value, options, onChange }) {
   );
 }
 
+// 소품용 — 드롭다운 대신 mm를 직접 숫자로 입력. 비우거나 범위를 벗어나면 blur 시 보정.
+function SizeInput({ label, value, onChange, min = 50, max = 6000 }) {
+  const [str, setStr] = useState(String(value));
+  useEffect(() => {
+    setStr(String(value));
+  }, [value]);
+  return (
+    <Field label={`${label} (mm · 직접 입력)`}>
+      <input
+        type="number"
+        step="10"
+        value={str}
+        onChange={(e) => setStr(e.target.value)}
+        onBlur={() => {
+          let n = parseInt(str, 10);
+          if (Number.isNaN(n)) {
+            setStr(String(value));
+            return;
+          }
+          n = Math.max(min, Math.min(max, n));
+          onChange(n);
+          setStr(String(n));
+        }}
+        className="w-full text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+      />
+    </Field>
+  );
+}
+
 function SumCell({ label, mm }) {
   return (
     <div className="bg-gray-50 border border-gray-200 rounded p-1.5 text-center">
@@ -3867,6 +4127,35 @@ function ProductThumb({ type, tpl, product }) {
         <rect x="3" y="4" width="18" height="11" rx="0.8" />
         <line x1="12" y1="15" x2="12" y2="20" />
         <line x1="8" y1="20" x2="16" y2="20" />
+      </svg>
+    );
+  }
+  if (type === 'counter') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={common}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.4"
+      >
+        <line x1="3" y1="8" x2="21" y2="8" />
+        <rect x="5" y="8" width="14" height="12" rx="0.5" />
+        <line x1="5" y1="13" x2="19" y2="13" />
+      </svg>
+    );
+  }
+  if (type === 'electric') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={common}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.4"
+      >
+        <rect x="6" y="3" width="12" height="18" rx="0.8" />
+        <path d="M12 7 l-2 4 h3 l-2 4" />
       </svg>
     );
   }

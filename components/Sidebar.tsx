@@ -89,9 +89,9 @@ export default function Sidebar() {
 
         {phases.map((phase) => (
           <div key={phase.key}>
-            {/* 단계 제목 (전시회 전/중/후) — 글씨 살짝 크게 */}
-            <div className="mb-2 flex items-center gap-1.5 px-1 text-sm font-bold text-zinc-500 dark:text-zinc-300">
-              <span className="text-base">{phase.emoji}</span>
+            {/* 단계 제목 (전시회 전/중/후) — 크고 진하게 강조 */}
+            <div className="mb-2.5 flex items-center gap-2 px-1 text-lg font-extrabold text-zinc-900 dark:text-white">
+              <span className="text-xl">{phase.emoji}</span>
               <span>{phase.label}</span>
             </div>
             <ul className="space-y-1.5">

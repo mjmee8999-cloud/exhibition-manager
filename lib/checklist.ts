@@ -53,7 +53,6 @@ export const DEFAULT_CHECKLIST: ChecklistPhase[] = [
         items: [
           { id: "b-badge", label: "출입 배지 등록 및 출력" },
           { id: "b-script", label: "상담 멘트 준비", note: "세부 멘트 작성" },
-          { id: "b-disposal", label: "폐기 절차 알아보기" },
         ],
       },
       {
@@ -63,6 +62,17 @@ export const DEFAULT_CHECKLIST: ChecklistPhase[] = [
           { id: "b-booth-sim", label: "부스 시뮬레이션" },
           { id: "b-product-list", label: "제품 리스트 확정" },
           { id: "b-bom", label: "BOM 작성" },
+          { id: "b-box-storage", label: "박스 보관 장소 확인" },
+          { id: "b-disposal", label: "폐기 절차 알아보기" },
+        ],
+      },
+      {
+        id: "g-promo",
+        title: "판촉물 · 소품",
+        items: [
+          { id: "b-promo-print", label: "판촉물 제작 (팜플렛 · 회사소개서 · 카탈로그)", note: "기획 → 디자인 제작 → 발주 요청" },
+          { id: "b-booth-decor", label: "부스 부착물 · 현수막 제작", note: "기획 → 디자인 제작 → 발주 요청" },
+          { id: "b-props", label: "전시 소품 준비" },
         ],
       },
       {
@@ -82,20 +92,12 @@ export const DEFAULT_CHECKLIST: ChecklistPhase[] = [
       },
       {
         id: "g-hotel",
-        title: "호텔 · 비행기",
+        title: "호텔/비행기/교통편",
         items: [
           { id: "b-hotel", label: "호텔 예약" },
           { id: "b-flight", label: "비행기 예약" },
+          { id: "b-local-transport", label: "현지 교통편 알아보기" },
           { id: "b-insurance", label: "여행자보험 가입", note: "삼성화재 다이렉트 - 표준플랜" },
-        ],
-      },
-      {
-        id: "g-promo",
-        title: "판촉물 · 소품",
-        items: [
-          { id: "b-promo-print", label: "판촉물 제작 (팜플렛 · 회사소개서 · 카탈로그)", note: "기획 → 디자인 제작 → 발주 요청" },
-          { id: "b-booth-decor", label: "부스 부착물 · 현수막 제작", note: "기획 → 디자인 제작 → 발주 요청" },
-          { id: "b-props", label: "전시 소품 준비" },
         ],
       },
       {
