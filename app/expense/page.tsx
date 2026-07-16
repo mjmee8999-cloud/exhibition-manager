@@ -5,7 +5,8 @@
 //    (판촉물 제작 / 쉽먼트 / 항공·숙박 / 현지 비용 / 기타)
 //  - 각 비용에 영수증(사진·PDF)을 여러 장 붙일 수 있고, 목록에서 바로 조회·추가할 수 있어요.
 //  - 나중에 언제든 영수증을 더 추가할 수 있어요. 내용 수정·삭제도 가능합니다.
-//  - 비용은 선택한 전시회의 expenses:<전시회id> 키로 localStorage에 저장됩니다.
+//  - 비용은 선택한 전시회별로 Supabase(진짜 DB)에 저장됩니다 → 어느 PC에서 열어도 공유돼요.
+//    (화면을 먼저 바꾸고 뒤에서 DB에 저장하는 "낙관적 업데이트" 방식)
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -26,6 +27,7 @@ import {
   type Currency,
   type Receipt,
 } from "@/lib/expense";
+import { listExpenses, saveExpense, deleteExpense } from "@/lib/expenseStore";
 
 // 파일 → 영수증(데이터 URL). 사진은 용량을 줄이고, 그 외(PDF 등)는 그대로 읽어요.
 async function readReceipt(file: File): Promise<Receipt> {
@@ -58,7 +60,7 @@ async function readReceipts(files: FileList): Promise<Receipt[]> {
 
 export default function ExpensePage() {
   const { selected } = useExhibitions();
-  const storageKey = selected ? expenseKey(selected.id) : null;
+  const exId = selected?.id ?? null;
 
   const [items, setItems] = useState<Expense[]>([]);
   const [draft, setDraft] = useState(emptyDraft());
@@ -70,26 +72,42 @@ export default function ExpensePage() {
   const itemFileRef = useRef<HTMLInputElement>(null); // 목록에서 바로 추가할 때 쓰는 입력
   const pendingItemId = useRef<string | null>(null); // 어느 비용에 추가할지 기억
 
-  // 저장된 비용 불러오기 (전시회 바뀌면 다시) — 예전 형식은 자동 변환
+  // 저장된 비용 불러오기 (전시회 바뀌면 다시) — DB에서, 예전 형식은 자동 변환
   useEffect(() => {
-    if (!storageKey) {
+    if (!exId) {
       setItems([]);
       return;
     }
-    const saved = localStorage.getItem(storageKey);
-    const parsed: unknown[] = saved ? JSON.parse(saved) : [];
-    setItems(parsed.map(normalizeExpense));
-  }, [storageKey]);
+    let cancelled = false;
+    (async () => {
+      let list = await listExpenses(exId);
+      // DB가 비었는데 예전 브라우저(localStorage) 저장분이 있으면 이번에 한 번 DB로 옮김
+      if (list.length === 0) {
+        const legacy = localStorage.getItem(expenseKey(exId));
+        if (legacy) {
+          try {
+            const arr = JSON.parse(legacy) as unknown[];
+            const migrated = arr.map(normalizeExpense);
+            if (migrated.length) {
+              for (const e of migrated) await saveExpense(exId, e);
+              list = migrated;
+            }
+          } catch {
+            /* 못 읽는 옛 자료는 건너뜀 */
+          }
+        }
+      }
+      if (!cancelled) applyLocal(list);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exId]);
 
-  function save(next: Expense[]) {
-    if (!storageKey) return;
+  // 화면 상태만(정렬 포함) 갱신합니다. DB 저장은 각 핸들러가 따로 처리해요.
+  function applyLocal(next: Expense[]) {
     const sorted = [...next].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(sorted));
-    } catch {
-      alert("저장 공간이 부족해요. 영수증 파일 용량이 큰 경우 일부를 지워 주세요.");
-      return;
-    }
     setItems(sorted);
   }
 
@@ -115,7 +133,12 @@ export default function ExpensePage() {
     if (!files?.length || !id) return;
     setBusy(true);
     const receipts = await readReceipts(files);
-    save(items.map((x) => (x.id === id ? { ...x, receipts: [...x.receipts, ...receipts] } : x)));
+    const next = items.map((x) =>
+      x.id === id ? { ...x, receipts: [...x.receipts, ...receipts] } : x,
+    );
+    applyLocal(next); // 화면 먼저
+    const changed = next.find((x) => x.id === id);
+    if (exId && changed) saveExpense(exId, changed); // 뒤에서 DB 저장
     setBusy(false);
     pendingItemId.current = null;
     if (itemFileRef.current) itemFileRef.current.value = "";
@@ -135,19 +158,22 @@ export default function ExpensePage() {
       memo: draft.memo.trim(),
       amount: Number(draft.amount),
     };
-    save([...items, entry]);
+    applyLocal([...items, entry]); // 화면 먼저
+    if (exId) saveExpense(exId, entry); // 뒤에서 DB 저장
     // 다음 입력을 위해 날짜·항목·통화는 유지, 내용/금액/비고/영수증만 비움
     setDraft((d) => ({ ...d, title: "", amount: 0, memo: "", receipts: [] }));
   }
 
   function handleDelete(id: string) {
     if (!confirm("이 비용 내역을 삭제할까요?")) return;
-    save(items.filter((e) => e.id !== id));
+    applyLocal(items.filter((e) => e.id !== id)); // 화면 먼저
+    deleteExpense(id); // 뒤에서 DB 삭제
   }
 
   // 수정 저장
   function saveEdit(updated: Expense) {
-    save(items.map((e) => (e.id === updated.id ? updated : e)));
+    applyLocal(items.map((e) => (e.id === updated.id ? updated : e))); // 화면 먼저
+    if (exId) saveExpense(exId, updated); // 뒤에서 DB 저장
     setEditing(null);
   }
 
