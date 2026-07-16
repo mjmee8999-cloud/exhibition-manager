@@ -177,3 +177,24 @@ export const DEFAULT_CHECKLIST: ChecklistPhase[] = [
     ],
   },
 ];
+
+// ── 진행 상태 형태 & 진행률 계산 헬퍼 ──
+//  - 실제 저장/불러오기는 lib/checklistStore.ts(Supabase)에서 합니다.
+//  - 여기 있는 건 "구성 + 진행상태 → 완료 개수"를 세는 순수 계산 함수뿐입니다.
+
+// 항목 하나의 진행 상태(체크 · 진행상황 및 비고)
+export type ChecklistItemState = { done?: boolean; note?: string };
+// 한 전시회의 진행 상태: { 항목id: {done, note} }
+export type ChecklistProgress = Record<string, ChecklistItemState>;
+
+// 구성 + 진행상태로 진행률(완료/전체/퍼센트)을 계산합니다.
+export function countProgress(
+  structure: ChecklistPhase[],
+  progress: ChecklistProgress,
+): { done: number; total: number; pct: number } {
+  const ids = structure.flatMap((p) => p.groups.flatMap((g) => g.items.map((it) => it.id)));
+  const total = ids.length;
+  const done = ids.filter((id) => progress[id]?.done).length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  return { done, total, pct };
+}

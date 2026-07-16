@@ -6,7 +6,7 @@
 //  - 입력 항목 본문은 공통 컴포넌트(ConsultationFormFields)를 씁니다.
 //    (저장된 목록은 뒤쪽 "명함 및 상담일지 정리"에서 봅니다.)
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
 import ConsultationFormFields from "@/components/ConsultationFormFields";
@@ -17,15 +17,13 @@ import {
   type Consultation,
   type FormState,
 } from "@/lib/consultation";
+import { saveConsultation } from "@/lib/consultationStore";
 
 export default function ConsultationPage() {
   const { selected } = useExhibitions();
 
-  const storageKey = selected ? `consultations:${selected.id}` : null;
-
   const [form, setForm] = useState<FormState>({ ...EMPTY_FORM, consultDate: todayStr() });
   const [cardImage, setCardImage] = useState<string>("");
-  const [records, setRecords] = useState<Consultation[]>([]);
 
   const [scanStatus, setScanStatus] = useState<"idle" | "loading" | "ok" | "warn" | "error">("idle");
   const [scanMsg, setScanMsg] = useState("");
@@ -36,25 +34,6 @@ export default function ConsultationPage() {
   const [savedMsg, setSavedMsg] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!storageKey) {
-      setRecords([]);
-      return;
-    }
-    const saved = localStorage.getItem(storageKey);
-    setRecords(saved ? JSON.parse(saved) : []);
-  }, [storageKey]);
-
-  function persist(next: Consultation[]) {
-    if (!storageKey) return;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
-      setRecords(next);
-    } catch {
-      alert("저장 공간이 부족해요. 나중에 데이터베이스(공유 저장)로 옮겨야 해요.");
-    }
-  }
 
   // 명함 사진 선택 → AI 자동 인식
   async function handleCardSelect(event: React.ChangeEvent<HTMLInputElement>) {
@@ -146,7 +125,8 @@ export default function ConsultationPage() {
   }
 
   function handleSave() {
-    if (!storageKey) return;
+    const exId = selected?.id;
+    if (!exId) return;
     if (!form.company.trim() && !form.name.trim()) {
       alert("회사명 또는 담당자명을 입력해 주세요.");
       return;
@@ -157,7 +137,7 @@ export default function ConsultationPage() {
       cardImage,
       ...form,
     };
-    persist([record, ...records]);
+    saveConsultation(exId, record); // DB에 저장
     resetForm();
     setSavedMsg("✅ 저장했어요. 뒤쪽 「명함 및 상담일지 정리」에서 확인할 수 있어요.");
     setTimeout(() => setSavedMsg(""), 4000);
@@ -210,7 +190,6 @@ export default function ConsultationPage() {
 
       {/* 전시회 배너 */}
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-blue-50 px-5 py-3.5 text-base dark:bg-blue-950/40">
-        <span className="text-lg">🎪</span>
         <span className="font-semibold">{selected.name}</span>
         <span className="text-zinc-500 dark:text-zinc-400">
           {selected.country}

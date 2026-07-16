@@ -16,6 +16,8 @@ import {
   ChevronDown,
   ChevronRight,
   Maximize2,
+  Undo2,
+  Eraser,
 } from 'lucide-react';
 
 /* ============================================================
@@ -1968,6 +1970,25 @@ export default function BoothSimulator() {
   // 물품 보관함 탭: 'shelf'(선반) | 'prop'(소품)
   const [libTab, setLibTab] = useState('shelf');
 
+  // ----- 전시회별 저장 -----
+  //  상위 앱이 iframe 주소에 ?ex=<전시회id> 를 붙여줘요. 그 값으로 저장 키를
+  //  전시회마다 다르게 만들어, 부스 디자인·전시품목이 전시회별로 따로 저장돼요.
+  const EX_ID = (() => {
+    try {
+      return new URLSearchParams(window.location.search).get('ex') || 'default';
+    } catch {
+      return 'default';
+    }
+  })();
+  const LIB_KEY = `homedant_booth_designs:${EX_ID}`;
+  const SHIPMENT_KEY = `booth_shipments:${EX_ID}`;
+
+  // ----- 실행취소(뒤로가기) 히스토리 -----
+  //  배치(products)가 바뀌기 직전 상태를 쌓아두고, 뒤로가기로 되돌립니다.
+  const historyRef = useRef([]); // 과거 스냅샷들 (products 배열의 복사본)
+  const lastPushRef = useRef({ key: null, t: 0 }); // 연속 편집 묶기용
+  const [historyLen, setHistoryLen] = useState(0);
+
   // ----- refs (Three.js handles) -----
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
@@ -1991,6 +2012,47 @@ export default function BoothSimulator() {
   useEffect(() => {
     selectedRef.current = selectedId;
   }, [selectedId]);
+
+  /* ---------- 실행취소(뒤로가기) ---------- */
+  // 물품을 바꾸는 동작 "직전"에 호출해 현재 배치를 히스토리에 저장해요.
+  // coalesceKey: 슬라이더 드래그처럼 짧은 시간에 여러 번 바뀌는 편집은
+  //   같은 key 로 묶어(0.8초 이내) 히스토리 한 칸으로 취급합니다.
+  const pushHistory = useCallback((coalesceKey = null) => {
+    const now = Date.now();
+    if (
+      coalesceKey &&
+      lastPushRef.current.key === coalesceKey &&
+      now - lastPushRef.current.t < 800
+    ) {
+      lastPushRef.current.t = now; // 같은 편집이 계속되는 중 → 묶기
+      return;
+    }
+    const snapshot = productsRef.current.map((p) => ({ ...p }));
+    historyRef.current.push(snapshot);
+    if (historyRef.current.length > 60) historyRef.current.shift(); // 최대 60단계
+    lastPushRef.current = { key: coalesceKey, t: now };
+    setHistoryLen(historyRef.current.length);
+  }, []);
+
+  // 뒤로가기: 가장 최근 스냅샷으로 배치를 되돌립니다.
+  const undo = useCallback(() => {
+    if (historyRef.current.length === 0) return;
+    const snap = historyRef.current.pop();
+    setProducts(snap.map((p) => ({ ...p })));
+    setSelectedId(null);
+    lastPushRef.current = { key: null, t: 0 };
+    setHistoryLen(historyRef.current.length);
+  }, []);
+
+  // 초기화: 배치한 물품을 전부 비웁니다(되돌리기 가능하도록 히스토리에 남겨요).
+  const resetAll = useCallback(() => {
+    if (productsRef.current.length === 0) return;
+    if (!window.confirm('배치한 물품을 모두 비울까요? (뒤로가기로 되돌릴 수 있어요)'))
+      return;
+    pushHistory();
+    setProducts([]);
+    setSelectedId(null);
+  }, [pushHistory]);
 
   /* ---------- Three.js init ---------- */
   useEffect(() => {
@@ -2540,6 +2602,7 @@ export default function BoothSimulator() {
     const drag = dragRef.current;
     if (drag) {
       if (drag.moved && drag.lastX !== undefined) {
+        pushHistory(); // 드래그 이동 직전 위치를 히스토리에 저장
         setProducts((prev) =>
           prev.map((p) =>
             p.instanceId === drag.instanceId
@@ -2601,27 +2664,30 @@ export default function BoothSimulator() {
         rotation: 0,
         addOns: [],
       };
+      pushHistory();
       setProducts((prev) => [...prev, newProduct]);
       setSelectedId(id);
     },
-    [booth.depth]
+    [booth.depth, pushHistory]
   );
 
   const updateSelected = useCallback(
     (patch) => {
       if (!selectedId) return;
+      pushHistory('edit'); // 속성 편집(슬라이더 등)은 묶어서 한 칸으로
       setProducts((prev) =>
         prev.map((p) => (p.instanceId === selectedId ? { ...p, ...patch } : p))
       );
     },
-    [selectedId]
+    [selectedId, pushHistory]
   );
 
   const deleteSelected = useCallback(() => {
     if (!selectedId) return;
+    pushHistory();
     setProducts((prev) => prev.filter((p) => p.instanceId !== selectedId));
     setSelectedId(null);
-  }, [selectedId]);
+  }, [selectedId, pushHistory]);
 
   const duplicateSelected = useCallback(() => {
     if (!selectedId) return;
@@ -2633,12 +2699,14 @@ export default function BoothSimulator() {
       instanceId: newId,
       position: { x: orig.position.x + 0.3, z: orig.position.z + 0.3 },
     };
+    pushHistory();
     setProducts((prev) => [...prev, copy]);
     setSelectedId(newId);
-  }, [selectedId]);
+  }, [selectedId, pushHistory]);
 
   const rotateSelected = useCallback(() => {
     if (!selectedId) return;
+    pushHistory('edit');
     setProducts((prev) =>
       prev.map((p) =>
         p.instanceId === selectedId
@@ -2646,7 +2714,7 @@ export default function BoothSimulator() {
           : p
       )
     );
-  }, [selectedId]);
+  }, [selectedId, pushHistory]);
 
   /* ---------- Export Booth Images: front / top / 45° ---------- */
   const exportBoothImages = () => {
@@ -2695,8 +2763,8 @@ export default function BoothSimulator() {
     doNext();
   };
 
-  /* ---------- 디자인 보관함 (localStorage) ---------- */
-  const LIB_KEY = 'homedant_booth_designs';
+  /* ---------- 디자인 보관함 (localStorage, 전시회별) ---------- */
+  //  LIB_KEY 는 위에서 전시회별로 정의됨 (`homedant_booth_designs:<전시회id>`)
 
   // load saved designs once on mount
   useEffect(() => {
@@ -2705,10 +2773,22 @@ export default function BoothSimulator() {
       if (raw) {
         const arr = JSON.parse(raw);
         if (Array.isArray(arr)) setSavedDesigns(arr);
+      } else {
+        // 예전(전시회 구분 없던) 저장분이 있으면 지금 전시회로 한 번만 옮겨옴
+        const legacy = window.localStorage.getItem('homedant_booth_designs');
+        if (legacy) {
+          const arr = JSON.parse(legacy);
+          if (Array.isArray(arr) && arr.length) {
+            setSavedDesigns(arr);
+            window.localStorage.setItem(LIB_KEY, legacy);
+            window.localStorage.removeItem('homedant_booth_designs');
+          }
+        }
       }
     } catch (err) {
       console.warn('Could not load design library:', err);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // helper: persist the given list to localStorage
@@ -2780,6 +2860,7 @@ export default function BoothSimulator() {
     if (design.booth)
       setBooth({ walls: { left: true, back: true, right: true }, ...design.booth });
     if (Array.isArray(design.products)) {
+      pushHistory(); // 불러오기 전 배치를 히스토리에 저장 → 뒤로가기로 복구 가능
       setProducts(design.products.map((p) => ({ ...p })));
       setSelectedId(null);
     }
@@ -2812,7 +2893,7 @@ export default function BoothSimulator() {
   // 저장은 booth-sim(iframe)과 우리 Next 앱이 같은 도메인이라 localStorage 를 공유해서 가능.
   const saveShipment = (d) => {
     try {
-      const KEY = 'booth_shipments';
+      const KEY = SHIPMENT_KEY; // 전시회별 키
       const shipment = {
         id: `sh_${Date.now()}`,
         name: d.name,
@@ -2860,6 +2941,18 @@ export default function BoothSimulator() {
   // editing a saved design it overwrites without a prompt.
   useEffect(() => {
     const onKeyDown = (e) => {
+      // Ctrl+Z / Cmd+Z → 뒤로가기(실행취소)
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key === 'z' || e.key === 'Z') &&
+        !e.shiftKey
+      ) {
+        const tag = (e.target && e.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        e.preventDefault();
+        undo();
+        return;
+      }
       const isSaveCombo =
         (e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S');
       if (!isSaveCombo) return;
@@ -2868,6 +2961,7 @@ export default function BoothSimulator() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 방향키(←→↑↓)로 선택한 물품을 부스 안에서 이동. 한 번에 50mm,
@@ -2888,6 +2982,7 @@ export default function BoothSimulator() {
       else return;
       e.preventDefault();
       const step = STEP * (e.shiftKey ? 4 : 1);
+      pushHistory('move'); // 방향키 연속 이동은 묶어서 한 칸으로
       setProducts((prev) =>
         prev.map((p) => {
           if (p.instanceId !== selectedId) return p;
@@ -3037,6 +3132,20 @@ export default function BoothSimulator() {
             >
               <Eye className="w-3.5 h-3.5" /> 정면
             </ViewBtn>
+            <div className="w-px h-5 bg-gray-300 mx-1" />
+            <IconBtn
+              onClick={undo}
+              disabled={historyLen === 0}
+              title="직전 작업으로 되돌리기 (이동·추가·삭제 등)"
+            >
+              <Undo2 className="w-3.5 h-3.5" /> 뒤로가기
+            </IconBtn>
+            <IconBtn
+              onClick={resetAll}
+              title="배치한 물품을 모두 비우기 (뒤로가기로 복구 가능)"
+            >
+              <Eraser className="w-3.5 h-3.5" /> 전체 비우기
+            </IconBtn>
             <div className="w-px h-5 bg-gray-300 mx-1" />
             <IconBtn
               onClick={exportBoothImages}
@@ -3789,15 +3898,17 @@ function ViewBtn({ active, children, onClick }) {
   );
 }
 
-function IconBtn({ children, onClick, title, primary }) {
+function IconBtn({ children, onClick, title, primary, disabled }) {
   return (
     <button
       onClick={onClick}
       title={title}
+      disabled={disabled}
       className={
-        primary
+        (primary
           ? 'inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded border border-blue-600 bg-blue-600 text-white font-semibold hover:bg-blue-700 transition'
-          : 'inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded border border-gray-300 hover:bg-gray-50 transition'
+          : 'inline-flex items-center gap-1 text-xs px-2 py-1.5 rounded border border-gray-300 hover:bg-gray-50 transition') +
+        (disabled ? ' opacity-40 cursor-not-allowed pointer-events-none' : '')
       }
     >
       {children}

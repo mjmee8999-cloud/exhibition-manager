@@ -1,9 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
 import "./globals.css";
 import { ExhibitionProvider } from "@/components/ExhibitionProvider";
-import Sidebar from "@/components/Sidebar";
+import AppFrame from "@/components/AppFrame";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,6 +19,12 @@ export const metadata: Metadata = {
   description: "전시회 준비부터 사후 관리까지 한 곳에서",
 };
 
+// 휴대폰에서 화면 폭에 맞게 표시되도록 (모바일 대응)
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -33,28 +38,8 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         {/* 전시회 정보를 앱 전체에서 공유하도록 감싸줍니다. */}
         <ExhibitionProvider>
-          {/* 상단 제목 바 */}
-          <header className="border-b border-black/10 dark:border-white/10">
-            <div className="px-6 py-3">
-              <Link href="/" className="flex items-center gap-4">
-                {/* 회사 로고 (public/speedrack-logo.jpg) */}
-                <img
-                  src="/speedrack-logo.jpg"
-                  alt="스피드랙 로고"
-                  className="h-16 w-auto rounded bg-white p-0.5"
-                />
-                <span className="text-xl font-bold">
-                  해외 전시회 통합 관리 시스템
-                </span>
-              </Link>
-            </div>
-          </header>
-
-          {/* 왼쪽 사이드바 + 오른쪽 본문 */}
-          <div className="flex flex-1">
-            <Sidebar />
-            <div className="flex-1">{children}</div>
-          </div>
+          {/* 상단 바 + 사이드바 + 본문 (휴대폰에선 사이드바가 서랍으로 바뀜) */}
+          <AppFrame>{children}</AppFrame>
         </ExhibitionProvider>
       </body>
     </html>

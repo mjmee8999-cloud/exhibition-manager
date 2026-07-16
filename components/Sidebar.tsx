@@ -1,16 +1,37 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { phases } from "@/app/features";
 import { useExhibitions } from "./ExhibitionProvider";
 
-export default function Sidebar() {
+// open/onClose 는 "휴대폰용 서랍" 여닫기용입니다. (데스크톱에선 항상 고정으로 보임)
+export default function Sidebar({
+  open = false,
+  onClose,
+}: {
+  open?: boolean;
+  onClose?: () => void;
+}) {
   const pathname = usePathname(); // 지금 보고 있는 페이지 주소 (메뉴 강조용)
   const { exhibitions, selectedId, selectExhibition } = useExhibitions();
 
+  // 휴대폰에서 메뉴(페이지)를 옮기면 서랍을 자동으로 닫습니다.
+  useEffect(() => {
+    onClose?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
   return (
-    <aside className="w-72 shrink-0 border-r border-black/10 dark:border-white/10">
+    <aside
+      className={
+        // 데스크톱(md↑): 예전 그대로 왼쪽 고정. 휴대폰: 화면 밖에서 슬라이드로 등장하는 서랍.
+        "fixed inset-y-0 left-0 z-40 w-72 overflow-y-auto border-r border-black/10 bg-white transition-transform dark:border-white/10 dark:bg-zinc-950 " +
+        "md:static md:z-auto md:shrink-0 md:translate-x-0 md:overflow-visible md:bg-transparent md:transition-none md:dark:bg-transparent " +
+        (open ? "translate-x-0" : "-translate-x-full md:translate-x-0")
+      }
+    >
       {/* 전시회 일정 조회 (특정 전시회 선택과 무관한 상위 메뉴) — 눈에 띄게 강조 */}
       <div className="p-3">
         <Link
@@ -84,6 +105,35 @@ export default function Sidebar() {
             }
           >
             전 · 중 · 후 준비 할 일 전체
+          </div>
+        </Link>
+
+        {/* 출장비 정산 — 출장 전반에 걸친 비용이라 체크리스트처럼 상위 메뉴로 */}
+        <Link
+          href="/expense"
+          className={
+            "block rounded-lg border px-3 py-2.5 transition-colors " +
+            (pathname === "/expense"
+              ? "border-transparent bg-blue-600"
+              : "border-black/10 hover:bg-black/[0.05] dark:border-white/10 dark:hover:bg-white/[0.06]")
+          }
+        >
+          <div
+            className={
+              "flex items-center gap-1.5 text-sm font-semibold " +
+              (pathname === "/expense" ? "text-white" : "text-zinc-800 dark:text-zinc-100")
+            }
+          >
+            <span>🧾</span>
+            <span>출장비 정산</span>
+          </div>
+          <div
+            className={
+              "mt-0.5 text-xs " +
+              (pathname === "/expense" ? "text-blue-100" : "text-zinc-400 dark:text-zinc-500")
+            }
+          >
+            판촉물 · 쉽먼트 · 항공 · 숙박 · 현지 비용
           </div>
         </Link>
 

@@ -6,6 +6,8 @@ import {
   type Exhibition,
 } from "@/components/ExhibitionProvider";
 import { exportBackup, importBackup } from "@/lib/backup";
+import DdayBadge from "@/components/DdayBadge";
+import ExhibitionEditModal from "@/components/ExhibitionEditModal";
 
 export default function ExhibitionsPage() {
   const { exhibitions, selectedId, addExhibition, selectExhibition, deleteExhibition } =
@@ -14,6 +16,9 @@ export default function ExhibitionsPage() {
   // 삭제하려고 누른 전시회를 잠시 기억합니다.
   // 값이 있으면 "정말 삭제할까요?" 경고창이 뜨고, null이면 닫힙니다.
   const [pendingDelete, setPendingDelete] = useState<Exhibition | null>(null);
+
+  // 수정하려고 누른 전시회. 값이 있으면 수정 창(모달)이 뜹니다.
+  const [editing, setEditing] = useState<Exhibition | null>(null);
 
   // 백업 파일 불러오기 관련
   const fileRef = useRef<HTMLInputElement>(null);
@@ -102,7 +107,10 @@ export default function ExhibitionsPage() {
               }
             >
               <div>
-                <div className="font-medium">{exhibition.name}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{exhibition.name}</span>
+                  <DdayBadge startDate={exhibition.startDate} />
+                </div>
                 <div className="text-sm text-zinc-500">
                   {exhibition.country}
                   {exhibition.city ? ` · ${exhibition.city}` : ""}
@@ -115,6 +123,12 @@ export default function ExhibitionsPage() {
                   className="rounded-lg border border-black/15 px-3 py-1.5 text-sm hover:bg-black/[0.05] dark:border-white/15 dark:hover:bg-white/[0.06]"
                 >
                   선택
+                </button>
+                <button
+                  onClick={() => setEditing(exhibition)}
+                  className="rounded-lg border border-black/15 px-3 py-1.5 text-sm hover:bg-black/[0.05] dark:border-white/15 dark:hover:bg-white/[0.06]"
+                >
+                  수정
                 </button>
                 <button
                   onClick={() => setPendingDelete(exhibition)}
@@ -166,6 +180,11 @@ export default function ExhibitionsPage() {
         )}
       </section>
 
+      {/* 전시회 정보 수정 창 (editing에 값이 있을 때만 보입니다) */}
+      {editing && (
+        <ExhibitionEditModal exhibition={editing} onClose={() => setEditing(null)} />
+      )}
+
       {/* 삭제 확인 경고창 (pendingDelete에 값이 있을 때만 보입니다) */}
       {pendingDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -208,12 +227,14 @@ function Field({
   type = "text",
   placeholder,
   required,
+  defaultValue,
 }: {
   label: string;
   name: string;
   type?: string;
   placeholder?: string;
   required?: boolean;
+  defaultValue?: string;
 }) {
   return (
     <label className="block">
@@ -226,6 +247,7 @@ function Field({
         type={type}
         placeholder={placeholder}
         required={required}
+        defaultValue={defaultValue}
         className="mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-zinc-900"
       />
     </label>

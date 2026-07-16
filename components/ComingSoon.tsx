@@ -61,7 +61,6 @@ export default function ComingSoon({
           {/* 전시회가 선택돼 있으면 어떤 전시회인지 배너로 표시 */}
           {exhibitionScoped && selected && (
             <div className="mt-6 flex flex-wrap items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm dark:bg-blue-950/40">
-              <span>🎪</span>
               <span className="font-semibold">{selected.name}</span>
               <span className="text-zinc-500 dark:text-zinc-400">
                 {selected.country}

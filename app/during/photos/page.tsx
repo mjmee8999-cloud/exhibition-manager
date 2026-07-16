@@ -77,6 +77,26 @@ export default function PhotosPage() {
     setViewer((v) => (v && v.id === id ? { ...v, caption } : v));
   }
 
+  // 사진 한 장을 내 컴퓨터로 다운로드 (파일명 = 전시회명_설명 또는 날짜)
+  function handleDownload(p: Photo) {
+    const base = (p.caption || formatDate(p.createdAt) || "현장사진")
+      .replace(/[\\/:*?"<>|]+/g, "_") // 파일명에 못 쓰는 문자 제거
+      .slice(0, 40);
+    const a = document.createElement("a");
+    a.href = p.image;
+    a.download = `${selected?.name ?? "전시회"}_${base}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  // 올린 사진 전부 다운로드 (한 장씩 순서대로 저장)
+  function handleDownloadAll() {
+    photos.forEach((p, i) => {
+      setTimeout(() => handleDownload(p), i * 300); // 브라우저가 막지 않도록 약간 간격
+    });
+  }
+
   // 전시회 미선택 안내
   if (!selected) {
     return (
@@ -101,14 +121,25 @@ export default function PhotosPage() {
     <main className="w-full px-8 py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">현장 사진</h1>
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={busy}
-          className="rounded-xl bg-blue-600 px-5 py-2.5 text-base font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {busy ? "올리는 중..." : "＋ 사진 추가"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {photos.length > 0 && (
+            <button
+              type="button"
+              onClick={handleDownloadAll}
+              className="rounded-xl border border-blue-300 px-5 py-2.5 text-base font-semibold text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/30"
+            >
+              ⬇ 전체 저장
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            className="rounded-xl bg-blue-600 px-5 py-2.5 text-base font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {busy ? "올리는 중..." : "＋ 사진 추가"}
+          </button>
+        </div>
         <input
           ref={fileRef}
           type="file"
@@ -121,7 +152,6 @@ export default function PhotosPage() {
 
       {/* 전시회 배너 + 장수 */}
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-blue-50 px-5 py-3.5 text-base dark:bg-blue-950/40">
-        <span className="text-lg">🎪</span>
         <span className="font-semibold">{selected.name}</span>
         <span className="text-zinc-500 dark:text-zinc-400">
           {selected.country}
@@ -169,13 +199,22 @@ export default function PhotosPage() {
                 <span className="truncate text-xs text-zinc-500">
                   {p.caption || formatDate(p.createdAt)}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(p.id)}
-                  className="shrink-0 rounded-lg border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/30"
-                >
-                  삭제
-                </button>
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(p)}
+                    className="rounded-lg border border-blue-300 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/30"
+                  >
+                    ⬇ 저장
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(p.id)}
+                    className="rounded-lg border border-red-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/30"
+                  >
+                    삭제
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -218,7 +257,14 @@ export default function PhotosPage() {
               placeholder="사진 설명을 입력하세요 (예: 우리 부스 정면, 경쟁사 A 신제품)"
               className="mt-4 w-full rounded-xl border border-black/15 bg-white px-4 py-3 text-base dark:border-white/15 dark:bg-zinc-900"
             />
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => handleDownload(viewer)}
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                ⬇ 다운로드
+              </button>
               <button
                 type="button"
                 onClick={() => handleDelete(viewer.id)}

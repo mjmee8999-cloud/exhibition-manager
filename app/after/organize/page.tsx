@@ -21,10 +21,14 @@ import {
   type Consultation,
   type FormState,
 } from "@/lib/consultation";
+import {
+  listConsultations,
+  saveConsultation,
+  deleteConsultation,
+} from "@/lib/consultationStore";
 
 export default function OrganizePage() {
   const { selected } = useExhibitions();
-  const storageKey = selected ? `consultations:${selected.id}` : null;
 
   const [records, setRecords] = useState<Consultation[]>([]);
 
@@ -44,23 +48,24 @@ export default function OrganizePage() {
   const [sortBy, setSortBy] = useState<"recent" | "old" | "importance" | "company">("recent");
 
   useEffect(() => {
-    if (!storageKey) {
+    const exId = selected?.id;
+    if (!exId) {
       setRecords([]);
       return;
     }
-    const saved = localStorage.getItem(storageKey);
-    setRecords(saved ? JSON.parse(saved) : []);
-  }, [storageKey]);
-
-  function saveRecords(next: Consultation[]) {
-    if (!storageKey) return;
-    localStorage.setItem(storageKey, JSON.stringify(next));
-    setRecords(next);
-  }
+    let alive = true;
+    listConsultations(exId).then((list) => {
+      if (alive) setRecords(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [selected?.id]);
 
   function handleDelete(id: string) {
     if (!confirm("이 상담일지를 삭제할까요? 되돌릴 수 없어요.")) return;
-    saveRecords(records.filter((r) => r.id !== id));
+    setRecords((prev) => prev.filter((r) => r.id !== id)); // 화면에 바로 반영
+    deleteConsultation(id); // 뒤에서 DB에서 삭제
     if (editId === id) closeEdit();
   }
 
@@ -88,7 +93,8 @@ export default function OrganizePage() {
       cardImage: editCardImage,
       ...editForm,
     };
-    saveRecords(records.map((r) => (r.id === editId ? updated : r)));
+    setRecords((prev) => prev.map((r) => (r.id === editId ? updated : r))); // 화면에 바로 반영
+    if (selected) saveConsultation(selected.id, updated); // 뒤에서 DB에 저장
     closeEdit();
   }
 
@@ -267,7 +273,6 @@ export default function OrganizePage() {
 
       {/* 전시회 배너 + 건수 */}
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-blue-50 px-5 py-3.5 text-base dark:bg-blue-950/40">
-        <span className="text-lg">🎪</span>
         <span className="font-semibold">{selected.name}</span>
         <span className="text-zinc-500 dark:text-zinc-400">
           {selected.country}

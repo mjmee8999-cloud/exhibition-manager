@@ -13,81 +13,67 @@ import {
   DEFAULT_CHECKLIST,
   type ChecklistGroup,
   type ChecklistPhase,
+  type ChecklistItemState,
+  type ChecklistProgress,
 } from "@/lib/checklist";
+import {
+  loadStructure as dbLoadStructure,
+  saveStructure as dbSaveStructure,
+  loadProgress as dbLoadProgress,
+  saveProgress as dbSaveProgress,
+} from "@/lib/checklistStore";
 
 // 항목별 진행 상태(체크 · 진행상황 및 비고)
-type ItemState = { done?: boolean; note?: string };
-type Progress = Record<string, ItemState>;
-
-const STRUCTURE_KEY = "checklist:structure";
+type ItemState = ChecklistItemState;
+type Progress = ChecklistProgress;
 
 // 깊은 복사 (구조 변경이 기본값에 영향 주지 않도록)
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v));
 }
 
-function loadStructure(): ChecklistPhase[] {
-  if (typeof window === "undefined") return clone(DEFAULT_CHECKLIST);
-  const raw = localStorage.getItem(STRUCTURE_KEY);
-  if (!raw) return clone(DEFAULT_CHECKLIST);
-  try {
-    const parsed = JSON.parse(raw) as ChecklistPhase[];
-    if (Array.isArray(parsed) && parsed.length) return parsed;
-  } catch {
-    // 형식 오류 시 기본값
-  }
-  return clone(DEFAULT_CHECKLIST);
-}
-
-function loadProgress(raw: string | null): Progress {
-  if (!raw) return {};
-  const parsed = JSON.parse(raw);
-  // 예전 배열 형식(체크된 id 목록)도 처리
-  if (Array.isArray(parsed)) {
-    const p: Progress = {};
-    for (const id of parsed as string[]) p[id] = { done: true };
-    return p;
-  }
-  // 예전 {items:{id:{done,progress,note}}} → note 하나로 합치기
-  const src = (parsed.items ?? {}) as Record<string, { done?: boolean; progress?: string; note?: string }>;
-  const p: Progress = {};
-  for (const [id, v] of Object.entries(src)) {
-    const merged = [v.progress, v.note].filter((s) => s && s.trim()).join(" · ");
-    p[id] = { done: v.done, note: merged || undefined };
-  }
-  return p;
-}
-
 export default function ChecklistPage() {
   const { selected } = useExhibitions();
-  const progressKey = selected ? `checklist:${selected.id}` : null;
 
   const [structure, setStructure] = useState<ChecklistPhase[]>(() => clone(DEFAULT_CHECKLIST));
   const [progress, setProgress] = useState<Progress>({});
   const [editing, setEditing] = useState(false);
 
-  // 구성은 앱 공통이라 처음 한 번만 로드
+  // 구성은 앱 공통이라 처음 한 번만 DB에서 로드
   useEffect(() => {
-    setStructure(loadStructure());
+    let alive = true;
+    dbLoadStructure().then((s) => {
+      if (alive) setStructure(s);
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  // 진행 상태는 선택한 전시회에 따라 로드
+  // 진행 상태는 선택한 전시회에 따라 DB에서 로드
   useEffect(() => {
-    if (!progressKey) {
+    const exId = selected?.id;
+    if (!exId) {
       setProgress({});
       return;
     }
-    setProgress(loadProgress(localStorage.getItem(progressKey)));
-  }, [progressKey]);
+    let alive = true;
+    dbLoadProgress(exId).then((p) => {
+      if (alive) setProgress(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [selected?.id]);
 
   function saveStructure(next: ChecklistPhase[]) {
-    setStructure(next);
-    localStorage.setItem(STRUCTURE_KEY, JSON.stringify(next));
+    setStructure(next); // 화면에 바로 반영
+    dbSaveStructure(next); // 뒤에서 DB에 저장
   }
 
   function saveProgress(next: Progress) {
-    setProgress(next);
-    if (progressKey) localStorage.setItem(progressKey, JSON.stringify({ items: next }));
+    setProgress(next); // 화면에 바로 반영
+    if (selected) dbSaveProgress(selected.id, next); // 뒤에서 DB에 저장
   }
 
   // ── 진행 상태 변경 ──
@@ -233,7 +219,6 @@ export default function ChecklistPage() {
 
       {/* 전시회 배너 */}
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-blue-50 px-5 py-3.5 text-base dark:bg-blue-950/40">
-        <span className="text-lg">🎪</span>
         <span className="font-semibold">{selected.name}</span>
         <span className="text-zinc-500 dark:text-zinc-400">
           {selected.country}

@@ -10,10 +10,10 @@ import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
 import { GradeBadge } from "@/components/formControls";
 import { consultationDate, joinList, type Consultation } from "@/lib/consultation";
+import { listConsultations } from "@/lib/consultationStore";
 
 export default function DashboardPage() {
   const { selected } = useExhibitions();
-  const storageKey = selected ? `consultations:${selected.id}` : null;
 
   const [records, setRecords] = useState<Consultation[]>([]);
 
@@ -21,18 +21,25 @@ export default function DashboardPage() {
   const [detail, setDetail] = useState<{ title: string; items: RankItem[] } | null>(null);
 
   useEffect(() => {
-    if (!storageKey) {
+    const exId = selected?.id;
+    if (!exId) {
       setRecords([]);
       return;
     }
-    const saved = localStorage.getItem(storageKey);
-    setRecords(saved ? JSON.parse(saved) : []);
-  }, [storageKey]);
+    let alive = true;
+    listConsultations(exId).then((list) => {
+      if (alive) setRecords(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [selected?.id]);
 
   // 데이터 집계 (records 가 바뀔 때만 다시 계산)
   const stats = useMemo(() => summarize(records), [records]);
 
   // 날짜별 상담 건수 (전시회 기간의 날짜들 + 실제 상담 날짜를 합쳐 시간순 정렬)
+  // 대시보드에는 앞 3일(1·2·3일차)만 카드로 보여줍니다.
   const dayCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const r of records) {
@@ -43,7 +50,10 @@ export default function DashboardPage() {
       ...listDays(selected?.startDate ?? "", selected?.endDate ?? ""),
       ...map.keys(),
     ]);
-    return [...days].sort().map((date) => ({ date, count: map.get(date) ?? 0 }));
+    return [...days]
+      .sort()
+      .map((date) => ({ date, count: map.get(date) ?? 0 }))
+      .slice(0, 3);
   }, [records, selected]);
 
   // ── 전시회 미선택 안내 ──
@@ -72,7 +82,6 @@ export default function DashboardPage() {
 
       {/* 전시회 배너 */}
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-blue-50 px-5 py-3.5 text-base dark:bg-blue-950/40">
-        <span className="text-lg">🎪</span>
         <span className="font-semibold">{selected.name}</span>
         <span className="text-zinc-500 dark:text-zinc-400">
           {selected.country}

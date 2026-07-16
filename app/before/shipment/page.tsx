@@ -10,6 +10,8 @@
 //  - 세 섹션 모두 엑셀로 추출할 수 있어요.
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useExhibitions } from "@/components/ExhibitionProvider";
 
 // ---- 타입 ----
 type RawItem = {
@@ -49,7 +51,9 @@ type Shipment = {
   lineItems?: LineItem[];
 };
 
-const KEY = "booth_shipments";
+// 전시품목은 선택한 전시회별로 따로 저장돼요: `booth_shipments:<전시회id>`
+const KEY_BASE = "booth_shipments";
+const LEGACY_KEY = "booth_shipments"; // 예전(전시회 구분 없던) 저장분
 
 const SHELF_NAMES = [
   "일반 선반",
@@ -146,6 +150,9 @@ function aggregate(items: LineItem[]) {
 }
 
 export default function ShipmentPage() {
+  const { selected } = useExhibitions();
+  const storageKey = selected ? `${KEY_BASE}:${selected.id}` : null;
+
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [items, setItems] = useState<LineItem[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -154,8 +161,24 @@ export default function ShipmentPage() {
   const [editBom, setEditBom] = useState(false);
 
   useEffect(() => {
+    if (!storageKey) {
+      setShipment(null);
+      setItems([]);
+      setLoaded(true);
+      return;
+    }
+    setLoaded(false);
     try {
-      const raw = window.localStorage.getItem(KEY);
+      let raw = window.localStorage.getItem(storageKey);
+      // 예전(전시회 구분 없던) 저장분이 있으면 이 전시회로 한 번만 옮겨옴
+      if (!raw) {
+        const legacy = window.localStorage.getItem(LEGACY_KEY);
+        if (legacy) {
+          window.localStorage.setItem(storageKey, legacy);
+          window.localStorage.removeItem(LEGACY_KEY);
+          raw = legacy;
+        }
+      }
       const list: Shipment[] = raw ? JSON.parse(raw) : [];
       const sh = Array.isArray(list) && list.length ? list[0] : null;
       if (sh) {
@@ -163,19 +186,22 @@ export default function ShipmentPage() {
         setItems(
           sh.lineItems ? normalizeItems(sh.lineItems) : buildLineItems(sh.items)
         );
+      } else {
+        setShipment(null);
+        setItems([]);
       }
     } catch {
       /* ignore */
     }
     setLoaded(true);
-  }, []);
+  }, [storageKey]);
 
   const persist = (nextItems: LineItem[]) => {
-    if (!shipment) return;
+    if (!shipment || !storageKey) return;
     const next: Shipment = { ...shipment, lineItems: nextItems };
     setShipment(next);
     try {
-      window.localStorage.setItem(KEY, JSON.stringify([next]));
+      window.localStorage.setItem(storageKey, JSON.stringify([next]));
     } catch {
       /* ignore */
     }
@@ -242,8 +268,9 @@ export default function ShipmentPage() {
     );
 
   const clearShipment = () => {
+    if (!storageKey) return;
     if (!confirm("전시 품목 리스트를 비울까요? 되돌릴 수 없어요.")) return;
-    window.localStorage.setItem(KEY, JSON.stringify([]));
+    window.localStorage.setItem(storageKey, JSON.stringify([]));
     setShipment(null);
     setItems([]);
   };
@@ -312,6 +339,29 @@ export default function ShipmentPage() {
       {on ? "완료" : "✏ 수정 및 추가"}
     </button>
   );
+
+  // 전시회 미선택 안내
+  if (!selected) {
+    return (
+      <main className="w-full px-8 py-8">
+        <h1 className="text-3xl font-bold tracking-tight">전시 품목 리스트</h1>
+        <div className="mt-8 max-w-2xl rounded-3xl border border-dashed border-black/15 bg-black/[0.02] p-12 text-center dark:border-white/15 dark:bg-white/[0.03]">
+          <p className="text-lg text-zinc-600 dark:text-zinc-400">
+            먼저 왼쪽에서 <b>전시회를 선택</b>해 주세요.
+          </p>
+          <p className="mt-2 text-sm text-zinc-500">
+            전시 품목은 전시회별로 따로 저장돼요.
+          </p>
+          <Link
+            href="/exhibitions"
+            className="mt-6 inline-block rounded-xl bg-blue-600 px-6 py-3 text-base font-medium text-white hover:bg-blue-700"
+          >
+            ＋ 전시회 등록 / 선택
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="w-full px-8 py-8">
