@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
-import { formatDate, resizeImage } from "@/lib/consultation";
+import { formatDate } from "@/lib/consultation";
 import {
   CATEGORIES,
   CURRENCIES,
@@ -27,35 +27,45 @@ import {
   type Currency,
   type Receipt,
 } from "@/lib/expense";
-import { listExpenses, saveExpense, deleteExpense } from "@/lib/expenseStore";
+import {
+  listExpenses,
+  saveExpense,
+  deleteExpense,
+  uploadReceipt,
+  receiptSrc,
+  deleteReceiptFiles,
+  migrateExpenseReceipts,
+} from "@/lib/expenseStore";
 
-// 파일 → 영수증(데이터 URL). 사진은 용량을 줄이고, 그 외(PDF 등)는 그대로 읽어요.
-async function readReceipt(file: File): Promise<Receipt> {
-  if (file.type.startsWith("image/")) {
-    const dataUrl = await resizeImage(file, 1600);
-    return { name: file.name, dataUrl, kind: "image" };
-  }
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
-  const kind: Receipt["kind"] = file.type === "application/pdf" ? "pdf" : "file";
-  return { name: file.name, dataUrl, kind };
-}
-
-// 여러 파일을 한 번에 영수증으로 읽기
-async function readReceipts(files: FileList): Promise<Receipt[]> {
+// 여러 파일을 한 번에 창고(Storage)에 올려 영수증 목록으로 만듭니다.
+async function uploadReceipts(exId: string, files: FileList): Promise<Receipt[]> {
   const out: Receipt[] = [];
   for (const f of Array.from(files)) {
     try {
-      out.push(await readReceipt(f));
+      out.push(await uploadReceipt(exId, f));
     } catch {
-      /* 못 읽는 파일은 건너뜀 */
+      /* 못 올린 파일은 건너뜀 */
     }
   }
   return out;
+}
+
+// 공개 URL 파일을 받아 원하는 이름으로 다운로드합니다(크로스오리진에서도 파일명 유지).
+async function downloadFile(url: string, filename: string) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objUrl);
+  } catch {
+    window.open(url, "_blank"); // 폴백: 새 탭으로 열기
+  }
 }
 
 export default function ExpensePage() {
@@ -97,6 +107,14 @@ export default function ExpensePage() {
           }
         }
       }
+      // 옛 방식(영수증을 DB에 글자로 저장)인 지출이 있으면 영수증 파일을 창고로 옮김
+      if (list.some((e) => e.receipts.some((r) => !r.path && r.dataUrl))) {
+        setBusy(true);
+        const moved: Expense[] = [];
+        for (const e of list) moved.push(await migrateExpenseReceipts(exId, e));
+        list = moved;
+        if (!cancelled) setBusy(false);
+      }
       if (!cancelled) applyLocal(list);
     })();
     return () => {
@@ -114,9 +132,9 @@ export default function ExpensePage() {
   // 새 비용 폼에 영수증 첨부 (여러 장 가능)
   async function handleDraftFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
-    if (!files?.length) return;
+    if (!files?.length || !exId) return;
     setBusy(true);
-    const receipts = await readReceipts(files);
+    const receipts = await uploadReceipts(exId, files);
     setDraft((d) => ({ ...d, receipts: [...d.receipts, ...receipts] }));
     setBusy(false);
     if (draftFileRef.current) draftFileRef.current.value = "";
@@ -130,9 +148,9 @@ export default function ExpensePage() {
   async function handleItemFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     const id = pendingItemId.current;
-    if (!files?.length || !id) return;
+    if (!files?.length || !id || !exId) return;
     setBusy(true);
-    const receipts = await readReceipts(files);
+    const receipts = await uploadReceipts(exId, files);
     const next = items.map((x) =>
       x.id === id ? { ...x, receipts: [...x.receipts, ...receipts] } : x,
     );
@@ -166,8 +184,12 @@ export default function ExpensePage() {
 
   function handleDelete(id: string) {
     if (!confirm("이 비용 내역을 삭제할까요?")) return;
+    const target = items.find((e) => e.id === id);
     applyLocal(items.filter((e) => e.id !== id)); // 화면 먼저
     deleteExpense(id); // 뒤에서 DB 삭제
+    // 이 지출에 붙은 영수증 파일도 창고에서 지움
+    const paths = (target?.receipts ?? []).map((r) => r.path ?? "").filter(Boolean);
+    if (paths.length) deleteReceiptFiles(paths);
   }
 
   // 수정 저장
@@ -520,6 +542,7 @@ export default function ExpensePage() {
       {editing && (
         <EditModal
           expense={editing}
+          exId={selected.id}
           onCancel={() => setEditing(null)}
           onSave={saveEdit}
           onView={(r) => setViewer(r)}
@@ -566,6 +589,7 @@ function ReceiptChip({
 
 // 영수증 크게 보기 창
 function ReceiptViewer({ receipt, onClose }: { receipt: Receipt; onClose: () => void }) {
+  const src = receiptSrc(receipt);
   return (
     <div
       onClick={onClose}
@@ -578,13 +602,13 @@ function ReceiptViewer({ receipt, onClose }: { receipt: Receipt; onClose: () => 
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-sm text-zinc-500">📎 {receipt.name}</span>
           <div className="flex items-center gap-2">
-            <a
-              href={receipt.dataUrl}
-              download={receipt.name}
+            <button
+              type="button"
+              onClick={() => downloadFile(src, receipt.name)}
               className="rounded-lg border border-black/15 px-3 py-1 text-xs hover:bg-black/[0.05] dark:border-white/15 dark:hover:bg-white/[0.06]"
             >
               ⬇ 저장
-            </a>
+            </button>
             <button
               type="button"
               onClick={onClose}
@@ -599,20 +623,20 @@ function ReceiptViewer({ receipt, onClose }: { receipt: Receipt; onClose: () => 
           {receipt.kind === "image" ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={receipt.dataUrl}
+              src={src}
               alt={receipt.name}
               className="mx-auto max-h-[70vh] w-auto max-w-full rounded-xl object-contain"
             />
           ) : receipt.kind === "pdf" ? (
-            <iframe src={receipt.dataUrl} title={receipt.name} className="h-[70vh] w-full rounded-xl" />
+            <iframe src={src} title={receipt.name} className="h-[70vh] w-full rounded-xl" />
           ) : (
-            <a
-              href={receipt.dataUrl}
-              download={receipt.name}
+            <button
+              type="button"
+              onClick={() => downloadFile(src, receipt.name)}
               className="inline-block rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
             >
               ⬇ 파일 내려받기
-            </a>
+            </button>
           )}
         </div>
       </div>
@@ -623,11 +647,13 @@ function ReceiptViewer({ receipt, onClose }: { receipt: Receipt; onClose: () => 
 // 비용 수정 창 — 항목·내용·금액·통화·영수증까지 모두 고칠 수 있어요.
 function EditModal({
   expense,
+  exId,
   onCancel,
   onSave,
   onView,
 }: {
   expense: Expense;
+  exId: string;
   onCancel: () => void;
   onSave: (e: Expense) => void;
   onView: (r: Receipt) => void;
@@ -643,7 +669,7 @@ function EditModal({
     const files = e.target.files;
     if (!files?.length) return;
     setBusy(true);
-    const receipts = await readReceipts(files);
+    const receipts = await uploadReceipts(exId, files);
     setForm((f) => ({ ...f, receipts: [...f.receipts, ...receipts] }));
     setBusy(false);
     if (fileRef.current) fileRef.current.value = "";

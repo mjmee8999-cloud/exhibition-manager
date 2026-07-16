@@ -5,10 +5,14 @@
 //  - 통화(원/달러/엔/유로)가 섞일 수 있어서 합계는 통화별로 따로 냅니다.
 
 // 첨부한 영수증 (사진이면 이미지, 아니면 PDF 등)
+//  - 파일 자체는 Supabase Storage(창고, 버킷 'receipts')에 올리고,
+//    여기에는 그 위치(path)와 이름·종류만 담습니다. (사진과 같은 방식)
+//  - dataUrl 은 옛 방식(파일을 글자로 통째 저장)이라, 이관이 끝나면 사라집니다.
 export type Receipt = {
   name: string; // 원본 파일명
-  dataUrl: string; // 파일 내용(데이터 URL)
   kind: "image" | "pdf" | "file"; // 미리보기 방식 구분
+  path?: string; // 새 방식: 창고 안 파일 위치
+  dataUrl?: string; // 옛 방식: 파일 내용(데이터 URL) — 이관 후 없음
 };
 
 // 비용 한 건
