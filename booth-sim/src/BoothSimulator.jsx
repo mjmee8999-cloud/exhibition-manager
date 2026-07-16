@@ -19,6 +19,14 @@ import {
   Undo2,
   Eraser,
 } from 'lucide-react';
+// 부스 디자인을 진짜 데이터베이스(Supabase)에 저장/조회하는 함수들.
+// 컴포넌트 안에도 saveDesign/deleteDesign 이라는 함수가 있어서, 이름이 겹치지
+// 않게 db* 별칭으로 가져옵니다.
+import {
+  listDesigns,
+  saveDesign as dbSaveDesign,
+  deleteDesign as dbDeleteDesign,
+} from './boothStore';
 
 /* ============================================================
    SIZE OPTIONS  ── per spec sheet
@@ -1960,7 +1968,7 @@ export default function BoothSimulator() {
   const [warnings, setWarnings] = useState({}); // instanceId -> reason
   // current 배치 이름 (used in exported PNG filenames)
   const [layoutName, setLayoutName] = useState('layout1');
-  // saved designs library (persisted in localStorage)
+  // saved designs library (persisted in Supabase DB, 전시회별)
   const [savedDesigns, setSavedDesigns] = useState([]);
   // id of the design currently being worked on (null = never saved yet).
   // Lets Ctrl+S overwrite the same library entry instead of always adding.
@@ -2763,42 +2771,56 @@ export default function BoothSimulator() {
     doNext();
   };
 
-  /* ---------- 디자인 보관함 (localStorage, 전시회별) ---------- */
-  //  LIB_KEY 는 위에서 전시회별로 정의됨 (`homedant_booth_designs:<전시회id>`)
+  /* ---------- 디자인 보관함 (Supabase DB, 전시회별) ---------- */
+  //  이제 디자인은 브라우저가 아니라 진짜 데이터베이스에 저장돼요.
+  //  → 어느 컴퓨터/브라우저에서 열어도 같은 디자인 목록이 보입니다(공유).
 
   // load saved designs once on mount
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(LIB_KEY);
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) setSavedDesigns(arr);
-      } else {
-        // 예전(전시회 구분 없던) 저장분이 있으면 지금 전시회로 한 번만 옮겨옴
-        const legacy = window.localStorage.getItem('homedant_booth_designs');
-        if (legacy) {
-          const arr = JSON.parse(legacy);
-          if (Array.isArray(arr) && arr.length) {
-            setSavedDesigns(arr);
-            window.localStorage.setItem(LIB_KEY, legacy);
-            window.localStorage.removeItem('homedant_booth_designs');
+    let cancelled = false;
+    (async () => {
+      try {
+        let list = await listDesigns(EX_ID);
+        // DB가 비어있고, 예전에 브라우저(localStorage)에 저장해둔 디자인이 있으면
+        // 이번에 한 번 DB로 옮겨줍니다(기존 작업물이 사라지지 않게).
+        if (list.length === 0) {
+          const legacyRaw =
+            window.localStorage.getItem(LIB_KEY) ||
+            window.localStorage.getItem('homedant_booth_designs');
+          if (legacyRaw) {
+            const arr = JSON.parse(legacyRaw);
+            if (Array.isArray(arr) && arr.length) {
+              for (const d of arr) {
+                try {
+                  await dbSaveDesign(EX_ID, d);
+                } catch (e) {
+                  console.warn('디자인 이관 실패:', e);
+                }
+              }
+              list = arr;
+            }
           }
         }
+        if (!cancelled) setSavedDesigns(list);
+      } catch (err) {
+        console.warn('디자인 목록 불러오기 실패, 브라우저 저장분으로 대체:', err);
+        // DB 연결이 실패하면 최소한 브라우저에 남은 저장분이라도 보여줍니다.
+        try {
+          const raw = window.localStorage.getItem(LIB_KEY);
+          if (raw) {
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr) && !cancelled) setSavedDesigns(arr);
+          }
+        } catch {
+          /* 무시 */
+        }
       }
-    } catch (err) {
-      console.warn('Could not load design library:', err);
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // helper: persist the given list to localStorage
-  const persistDesigns = (list) => {
-    try {
-      window.localStorage.setItem(LIB_KEY, JSON.stringify(list));
-    } catch (err) {
-      alert('Could not save to browser storage: ' + err.message);
-    }
-  };
 
   // brief "Saved ✓" flash, auto-clears after ~1.8s
   const flashSaved = (msg) => {
@@ -2830,8 +2852,10 @@ export default function BoothSimulator() {
         const next = savedDesigns.map((d) =>
           d.id === existing.id ? updated : d
         );
-        setSavedDesigns(next);
-        persistDesigns(next);
+        setSavedDesigns(next); // 화면 먼저 갱신
+        dbSaveDesign(EX_ID, updated).catch((e) =>
+          alert('저장에 실패했어요(인터넷 확인): ' + e.message),
+        ); // 뒤에서 DB 저장
         flashSaved(`“${existing.name}” 저장됨`);
         return;
       }
@@ -2848,8 +2872,10 @@ export default function BoothSimulator() {
       products: products.map((p) => ({ ...p })),
     };
     const next = [...savedDesigns, design];
-    setSavedDesigns(next);
-    persistDesigns(next);
+    setSavedDesigns(next); // 화면 먼저 갱신
+    dbSaveDesign(EX_ID, design).catch((e) =>
+      alert('저장에 실패했어요(인터넷 확인): ' + e.message),
+    ); // 뒤에서 DB 저장
     setLayoutName(name.trim());
     setCurrentDesignId(design.id); // 이후 Ctrl+S 는 이 디자인을 덮어써요
     flashSaved(`“${design.name}” 저장됨`);
@@ -2870,8 +2896,10 @@ export default function BoothSimulator() {
 
   const deleteDesign = (id) => {
     const next = savedDesigns.filter((d) => d.id !== id);
-    setSavedDesigns(next);
-    persistDesigns(next);
+    setSavedDesigns(next); // 화면 먼저 갱신
+    dbDeleteDesign(id).catch((e) =>
+      alert('삭제에 실패했어요(인터넷 확인): ' + e.message),
+    ); // 뒤에서 DB 삭제
     // if we deleted the design we were tracking, forget it so the next
     // save creates a fresh entry instead of silently failing
     if (currentDesignId === id) setCurrentDesignId(null);
@@ -2882,11 +2910,12 @@ export default function BoothSimulator() {
     if (!design) return;
     const newName = window.prompt('제목 변경:', design.name);
     if (!newName) return;
-    const next = savedDesigns.map((d) =>
-      d.id === id ? { ...d, name: newName.trim() } : d
-    );
-    setSavedDesigns(next);
-    persistDesigns(next);
+    const updated = { ...design, name: newName.trim() };
+    const next = savedDesigns.map((d) => (d.id === id ? updated : d));
+    setSavedDesigns(next); // 화면 먼저 갱신
+    dbSaveDesign(EX_ID, updated).catch((e) =>
+      alert('이름 변경에 실패했어요(인터넷 확인): ' + e.message),
+    ); // 뒤에서 DB 저장
   };
 
   // 이 배치를 "전시품목(Shipment)"으로 저장하고, 상위 앱의 전시품목 페이지로 이동.
