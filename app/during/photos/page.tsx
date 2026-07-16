@@ -2,98 +2,160 @@
 
 // 전시회 현장 사진 기록 화면입니다.
 //  - 부스 · 전시장 · 경쟁사 등 현장 사진을 전시회별로 모아둡니다.
-//  - 사진은 선택한 전시회의 photos:<전시회id> 키로 localStorage에 저장됩니다.
+//  - 사진 파일은 Supabase Storage(사진 창고)에 올리고, 정보는 DB에 저장됩니다.
+//    → 어느 PC에서 열어도 같은 사진이 보여요(모두 공유).
 //  - 사진마다 간단한 설명(메모)을 달 수 있고, 눌러서 크게 볼 수 있어요.
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
 import { formatDate, resizeImage } from "@/lib/consultation";
+import {
+  listPhotos,
+  uploadPhoto,
+  updatePhotoCaption,
+  deletePhoto,
+  type PhotoRecord,
+} from "@/lib/photoStore";
 
-// 현장 사진 한 장의 정보
-type Photo = {
-  id: string;
-  createdAt: string;
-  image: string; // 데이터 URL (리사이즈된 JPEG)
-  caption: string; // 사진 설명
-};
+// 데이터 URL(사진을 글자로 바꾼 것) → 진짜 파일(Blob)로 변환합니다. 업로드할 때 필요해요.
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [head, body] = dataUrl.split(",");
+  const mime = head.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+  const bin = atob(body);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
 
 export default function PhotosPage() {
   const { selected } = useExhibitions();
-  const storageKey = selected ? `photos:${selected.id}` : null;
+  const exId = selected?.id ?? null;
 
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [busy, setBusy] = useState(false); // 업로드 처리 중 표시
-  const [viewer, setViewer] = useState<Photo | null>(null); // 크게 보기 대상
+  const [photos, setPhotos] = useState<PhotoRecord[]>([]);
+  const [busy, setBusy] = useState(false); // 업로드/이관 처리 중 표시
+  const [viewer, setViewer] = useState<PhotoRecord | null>(null); // 크게 보기 대상
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // 사진 목록 불러오기 (전시회 바뀌면 다시) — DB에서, 예전 localStorage 사진은 자동 이관
   useEffect(() => {
-    if (!storageKey) {
+    if (!exId) {
       setPhotos([]);
       return;
     }
-    const saved = localStorage.getItem(storageKey);
-    setPhotos(saved ? JSON.parse(saved) : []);
-  }, [storageKey]);
+    let cancelled = false;
+    (async () => {
+      let list = await listPhotos(exId);
+      // DB가 비었는데 예전 브라우저(localStorage) 사진이 있으면 이번에 한 번 Storage로 옮김
+      if (list.length === 0) {
+        const legacy = localStorage.getItem(`photos:${exId}`);
+        if (legacy) {
+          try {
+            const old = JSON.parse(legacy) as {
+              id: string;
+              createdAt: string;
+              image: string;
+              caption?: string;
+            }[];
+            if (old.length) {
+              setBusy(true);
+              const migrated: PhotoRecord[] = [];
+              for (const o of old) {
+                try {
+                  const rec = await uploadPhoto(exId, {
+                    id: o.id,
+                    blob: dataUrlToBlob(o.image),
+                    caption: o.caption ?? "",
+                    createdAt: o.createdAt,
+                  });
+                  migrated.push(rec);
+                } catch (e) {
+                  console.warn("사진 이관 실패:", e);
+                }
+              }
+              migrated.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+              list = migrated;
+              if (!cancelled) setBusy(false);
+            }
+          } catch {
+            /* 못 읽는 옛 자료는 건너뜀 */
+          }
+        }
+      }
+      if (!cancelled) setPhotos(list);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exId]);
 
-  function save(next: Photo[]) {
-    if (!storageKey) return;
-    localStorage.setItem(storageKey, JSON.stringify(next));
-    setPhotos(next);
-  }
-
-  // 사진 여러 장 업로드 (각각 리사이즈해서 추가)
+  // 사진 여러 장 업로드 (각각 리사이즈해서 Storage에 올림)
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const files = event.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || !exId) return;
     setBusy(true);
-    const added: Photo[] = [];
+    const added: PhotoRecord[] = [];
     for (const file of Array.from(files)) {
       try {
-        const image = await resizeImage(file, 1400);
-        added.push({
+        const dataUrl = await resizeImage(file, 1400);
+        const rec = await uploadPhoto(exId, {
           id: crypto.randomUUID(),
-          createdAt: new Date().toISOString(),
-          image,
+          blob: dataUrlToBlob(dataUrl),
           caption: "",
+          createdAt: new Date().toISOString(),
         });
-      } catch {
-        // 못 읽는 파일은 건너뜁니다.
+        added.push(rec);
+      } catch (e) {
+        console.warn("사진 업로드 실패:", e);
       }
     }
-    if (added.length) save([...added, ...photos]); // 최신 사진이 앞에 오도록
+    if (added.length) setPhotos((prev) => [...added, ...prev]); // 최신 사진이 앞에 오도록
     setBusy(false);
     if (fileRef.current) fileRef.current.value = "";
   }
 
   function handleDelete(id: string) {
     if (!confirm("이 사진을 삭제할까요? 되돌릴 수 없어요.")) return;
-    save(photos.filter((p) => p.id !== id));
+    const target = photos.find((p) => p.id === id);
+    setPhotos((prev) => prev.filter((p) => p.id !== id)); // 화면 먼저
+    if (target) deletePhoto(id, target.path); // 뒤에서 Storage+DB 삭제
     if (viewer?.id === id) setViewer(null);
   }
 
   function handleCaption(id: string, caption: string) {
-    save(photos.map((p) => (p.id === id ? { ...p, caption } : p)));
+    setPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, caption } : p))); // 화면 먼저
+    updatePhotoCaption(id, caption); // 뒤에서 DB 저장
     setViewer((v) => (v && v.id === id ? { ...v, caption } : v));
   }
 
   // 사진 한 장을 내 컴퓨터로 다운로드 (파일명 = 전시회명_설명 또는 날짜)
-  function handleDownload(p: Photo) {
+  async function handleDownload(p: PhotoRecord) {
     const base = (p.caption || formatDate(p.createdAt) || "현장사진")
       .replace(/[\\/:*?"<>|]+/g, "_") // 파일명에 못 쓰는 문자 제거
       .slice(0, 40);
-    const a = document.createElement("a");
-    a.href = p.image;
-    a.download = `${selected?.name ?? "전시회"}_${base}.jpg`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    const filename = `${selected?.name ?? "전시회"}_${base}.jpg`;
+    try {
+      // 공개 URL 사진을 파일로 받아서 원하는 이름으로 저장
+      const res = await fetch(p.image);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open(p.image, "_blank"); // 폴백: 새 탭으로 열기
+    }
   }
 
   // 올린 사진 전부 다운로드 (한 장씩 순서대로 저장)
   function handleDownloadAll() {
     photos.forEach((p, i) => {
-      setTimeout(() => handleDownload(p), i * 300); // 브라우저가 막지 않도록 약간 간격
+      setTimeout(() => handleDownload(p), i * 400); // 브라우저가 막지 않도록 약간 간격
     });
   }
 
