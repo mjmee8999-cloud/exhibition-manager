@@ -1,10 +1,10 @@
 "use client";
 
 // 전시회 준비 체크리스트 화면입니다.
-//  - "구성"(섹션·항목)은 모든 전시회 공통이며 localStorage(checklist:structure)에 저장돼요.
-//    처음엔 lib/checklist.ts의 기본값(DEFAULT_CHECKLIST)으로 시작합니다.
-//  - "수정" 버튼을 켜면 섹션/항목을 추가·삭제·이름변경·이동할 수 있어요.
-//  - 체크 여부와 "진행상황 및 비고"는 전시회별(checklist:<전시회id>)로 따로 저장됩니다.
+//  - "구성"(섹션·항목)은 이제 **전시회별로 따로** 저장됩니다.
+//    처음엔 lib/checklist.ts의 기본값(DEFAULT_CHECKLIST)으로 시작하고,
+//    "수정"으로 바꾸면 그 전시회에만 적용돼요(다른 전시회는 그대로).
+//  - 체크 여부와 "진행상황 및 비고"도 전시회별로 따로 저장됩니다.
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -39,25 +39,18 @@ export default function ChecklistPage() {
   const [progress, setProgress] = useState<Progress>({});
   const [editing, setEditing] = useState(false);
 
-  // 구성은 앱 공통이라 처음 한 번만 DB에서 로드
-  useEffect(() => {
-    let alive = true;
-    dbLoadStructure().then((s) => {
-      if (alive) setStructure(s);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  // 진행 상태는 선택한 전시회에 따라 DB에서 로드
+  // 구성·진행 상태 모두 선택한 전시회에 따라 DB에서 로드
   useEffect(() => {
     const exId = selected?.id;
     if (!exId) {
+      setStructure(clone(DEFAULT_CHECKLIST));
       setProgress({});
       return;
     }
     let alive = true;
+    dbLoadStructure(exId).then((s) => {
+      if (alive) setStructure(s);
+    });
     dbLoadProgress(exId).then((p) => {
       if (alive) setProgress(p);
     });
@@ -68,7 +61,7 @@ export default function ChecklistPage() {
 
   function saveStructure(next: ChecklistPhase[]) {
     setStructure(next); // 화면에 바로 반영
-    dbSaveStructure(next); // 뒤에서 DB에 저장
+    if (selected) dbSaveStructure(selected.id, next); // 뒤에서 이 전시회 구성만 저장
   }
 
   function saveProgress(next: Progress) {
@@ -145,7 +138,7 @@ export default function ChecklistPage() {
   }
 
   function resetStructure() {
-    if (!confirm("체크리스트 구성을 처음 기본값으로 되돌릴까요? (직접 만든 섹션·항목은 사라져요. 체크·비고 기록은 유지)")) return;
+    if (!confirm("이 전시회의 체크리스트 구성을 기본값으로 되돌릴까요? (이 전시회에서 직접 만든 섹션·항목은 사라져요. 체크·비고 기록은 유지, 다른 전시회는 영향 없음)")) return;
     saveStructure(clone(DEFAULT_CHECKLIST));
   }
 
@@ -228,7 +221,7 @@ export default function ChecklistPage() {
 
       {editing ? (
         <p className="mt-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-          🛠 수정 모드예요. 섹션·항목을 추가/삭제/이름변경/이동할 수 있어요. <b>구성 변경은 모든 전시회에 공통 적용</b>돼요.
+          🛠 수정 모드예요. 섹션·항목을 추가/삭제/이름변경/이동할 수 있어요. <b>구성 변경은 이 전시회({selected.name})에만 적용</b>돼요.
         </p>
       ) : (
         <>

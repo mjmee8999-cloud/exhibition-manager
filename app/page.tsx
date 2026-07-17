@@ -12,20 +12,22 @@ import DdayBadge from "@/components/DdayBadge";
 import ExhibitionEditModal from "@/components/ExhibitionEditModal";
 import {
   countProgress,
+  DEFAULT_CHECKLIST,
   type ChecklistPhase,
   type ChecklistProgress,
 } from "@/lib/checklist";
-import { loadStructure, loadAllProgress } from "@/lib/checklistStore";
+import { loadAllStructures, loadAllProgress } from "@/lib/checklistStore";
 
 export default function Home() {
   const { exhibitions, selectedId, selectExhibition } = useExhibitions();
   const [editing, setEditing] = useState<Exhibition | null>(null);
 
-  // 체크리스트 구성(공통)과 전시회별 진행상태를 DB에서 불러와 카드 진행률에 씁니다.
-  const [structure, setStructure] = useState<ChecklistPhase[] | null>(null);
+  // 전시회별 체크리스트 구성·진행상태를 DB에서 불러와 카드 진행률에 씁니다.
+  //  - 구성이 저장 안 된 전시회는 기본값(DEFAULT_CHECKLIST)으로 계산.
+  const [structures, setStructures] = useState<Record<string, ChecklistPhase[]> | null>(null);
   const [allProgress, setAllProgress] = useState<Record<string, ChecklistProgress>>({});
   useEffect(() => {
-    loadStructure().then(setStructure);
+    loadAllStructures().then(setStructures);
     loadAllProgress().then(setAllProgress);
   }, []);
 
@@ -100,7 +102,7 @@ export default function Home() {
                     key={ex.id}
                     ex={ex}
                     active={ex.id === selectedId}
-                    structure={structure}
+                    structure={structures ? (structures[ex.id] ?? DEFAULT_CHECKLIST) : null}
                     progress={allProgress[ex.id] ?? {}}
                     onSelect={() => selectExhibition(ex.id)}
                     onEdit={() => setEditing(ex)}
@@ -213,7 +215,7 @@ function ChecklistMini({
   const { pct } = countProgress(structure, progress);
   return (
     <div className="mt-4 flex items-center justify-end gap-2">
-      <span className="text-xs text-zinc-400 dark:text-zinc-500">체크리스트</span>
+      <span className="text-xs text-zinc-400 dark:text-zinc-500">진행률</span>
       <div className="h-1.5 w-20 overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
         <div className="h-full rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
       </div>
