@@ -2488,25 +2488,11 @@ export default function BoothSimulator() {
     });
 
     // compute warnings
-    const w = (booth.width * MM_TO_M) / 2;
-    const d = (booth.depth * MM_TO_M) / 2;
     // 벽에 붙이는 판(설명판 등)은 겹쳐도 되고 공중에 있어 점검에서 제외
     const isFloating = (p) => !!tplOf(p)?.floating;
     const newWarn = {};
-    products.forEach((p) => {
-      if (isFloating(p)) return;
-      const halfW =
-        ((p.rotation % 180 === 0 ? p.width : p.depth) * MM_TO_M) / 2;
-      const halfD =
-        ((p.rotation % 180 === 0 ? p.depth : p.width) * MM_TO_M) / 2;
-      // bounds check
-      if (
-        Math.abs(p.position.x) + halfW > w + 0.001 ||
-        Math.abs(p.position.z) + halfD > d + 0.001
-      ) {
-        newWarn[p.instanceId] = 'out_of_bounds';
-      }
-    });
+    // 부스 밖으로 튀어나옴(out_of_bounds) 경고는 사용자 요청으로 표시하지 않음.
+    // (물건끼리 겹침 경고만 유지)
     // collisions (simple AABB)
     for (let i = 0; i < products.length; i++) {
       for (let j = i + 1; j < products.length; j++) {
