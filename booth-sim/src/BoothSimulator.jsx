@@ -120,6 +120,7 @@ const PRODUCT_LIBRARY = [
     frameColors: ['black', 'white'],
     boardColors: ['wood', 'white'],
     addOns: [],
+    hasDrawer: true, // 최하단~중간단 사이에 서랍장 추가 옵션
   },
   {
     id: 'shelf_linked',
@@ -1105,7 +1106,88 @@ function buildGarmentRack(group, p, tpl) {
   });
   // 옷걸이에 걸린 옷 3벌
   addHangingClothes(group, w, h);
+
+  // 서랍장 옵션: 최하단 판 ~ 그 다음(중간) 판 사이 공간에 서랍장을 채운다
+  if (p.drawer) {
+    const thickness = 0.009,
+      bottomLift = 0.008,
+      beamH = 0.03;
+    const yBoardBottom = bottomLift + beamH + thickness / 2;
+    const yBoardTop = h - thickness / 2;
+    const tiers = p.tier || tpl.defaultTier;
+    // 최하단 판 바로 위(y0) ~ 그 위 첫 번째 판 바로 아래(y1)
+    const yMid =
+      tiers <= 1
+        ? yBoardTop
+        : yBoardBottom + (1 / (tiers - 1)) * (yBoardTop - yBoardBottom);
+    const y0 = tiers >= 2 ? yBoardBottom + thickness / 2 : bottomLift + beamH;
+    const y1 = yMid - thickness / 2;
+    addDrawerUnit(group, w, d, y0, y1, p);
+  }
+
   addPostFeet(group, w, d, mats.foot, 0.025);
+}
+
+// 서랍장 유닛 — [y0, y1] 높이 구간을 스틸 서랍 여러 칸으로 채운다.
+// 행거 선반의 "서랍장 추가" 옵션에서 사용. (buildDrawer 스타일 재사용)
+function addDrawerUnit(group, w, d, y0, y1, p) {
+  const spanH = y1 - y0;
+  if (spanH < 0.08) return; // 공간이 너무 좁으면 생략
+  const isWhite = p.frameColor === 'white';
+  const bodyHex = isWhite ? 0xffffff : 0x2a2a2e;
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: bodyHex,
+    metalness: 0.05,
+    roughness: 0.85,
+  });
+  const frontMat = new THREE.MeshStandardMaterial({
+    color: bodyHex,
+    metalness: 0.05,
+    roughness: 0.82,
+  });
+  const handleMat = new THREE.MeshStandardMaterial({
+    color: isWhite ? 0xbdbdbd : 0x8a8a8a,
+    metalness: 0.45,
+    roughness: 0.5,
+  });
+  const bodyW = w - 0.06;
+  const bodyD = d - 0.06;
+  // 서랍 한 칸 ≈ 180mm 기준으로 칸 수 결정 (2~4칸)
+  const count = Math.max(2, Math.min(4, Math.round(spanH / 0.18)));
+  const drawerH = spanH / count;
+  for (let i = 0; i < count; i++) {
+    const yc = y0 + drawerH * (i + 0.5);
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(bodyW - 0.02, drawerH * 0.96, bodyD - 0.02),
+      bodyMat
+    );
+    body.position.set(0, yc, 0);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    group.add(body);
+    const front = new THREE.Mesh(
+      new THREE.BoxGeometry(bodyW, drawerH * 0.96, 0.014),
+      frontMat
+    );
+    front.position.set(0, yc, d / 2 - 0.03);
+    front.castShadow = true;
+    group.add(front);
+    const handle = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.007, 0.007, bodyW * 0.45, 10),
+      handleMat
+    );
+    handle.rotation.z = Math.PI / 2;
+    handle.position.set(0, yc + drawerH * 0.18, d / 2 - 0.02);
+    group.add(handle);
+    [-bodyW * 0.22, bodyW * 0.22].forEach((hx) => {
+      const sx = new THREE.Mesh(
+        new THREE.BoxGeometry(0.01, 0.01, 0.012),
+        handleMat
+      );
+      sx.position.set(hx, yc + drawerH * 0.18, d / 2 - 0.028);
+      group.add(sx);
+    });
+  }
 }
 
 // 행거 봉에 옷걸이 + 옷 3벌을 걸어 준다. (시각용, 치수/BOM엔 영향 없음)
@@ -2384,7 +2466,7 @@ export default function BoothSimulator() {
       const tpl = PRODUCT_LIBRARY.find((t) => t.id === p.productId);
       if (!tpl) return;
       let mesh = map.get(p.instanceId);
-      const fingerprint = `${p.width}-${p.depth}-${p.height}-${p.tier}-${p.frameColor}-${p.boardColor}-${p.brand}-${p.text || ''}-${p.shape || ''}`;
+      const fingerprint = `${p.width}-${p.depth}-${p.height}-${p.tier}-${p.frameColor}-${p.boardColor}-${p.brand}-${p.text || ''}-${p.shape || ''}-${p.drawer ? 'D' : ''}`;
       if (!mesh || mesh.userData.fingerprint !== fingerprint) {
         if (mesh) {
           group.remove(mesh);
@@ -2783,6 +2865,7 @@ export default function BoothSimulator() {
         boardColor: tpl.boardColors[0],
         text: tpl.defaultText || '', // 설명판 등 문구 입력용
         shape: tpl.defaultShape || 'rect', // 테이블 등 모양(원형/사각)
+        drawer: false, // 행거 선반 서랍장 옵션 (기본 꺼짐)
         // floating(설명판·LED조명): 뒷벽 근처에 공중으로 띄워서 시작
         // (조명은 defaultY로 벽 상단 근처, 설명판은 y≈1.3m)
         position: tpl.floating
@@ -3857,6 +3940,21 @@ function PropertyPanel({
             placeholder="판에 표시할 텍스트를 입력하세요 (줄바꿈 가능)"
             className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 resize-y"
           />
+        </Section>
+      )}
+
+      {/* 서랍장 옵션 (행거 선반 등) */}
+      {tpl.hasDrawer && (
+        <Section title="옵션">
+          <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!product.drawer}
+              onChange={(e) => update({ drawer: e.target.checked })}
+              className="w-4 h-4"
+            />
+            서랍장 추가 (최하단~중간단 사이)
+          </label>
         </Section>
       )}
 
