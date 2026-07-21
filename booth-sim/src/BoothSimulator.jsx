@@ -305,6 +305,46 @@ const PRODUCT_LIBRARY = [
     addOns: [],
     hideBrand: true,
   },
+  {
+    id: 'prop_light',
+    group: 'prop',
+    category: 'Spotlight',
+    name: '조명',
+    type: 'light',
+    // 바닥에 세우는 작은 스탠드 조명(스포트라이트)
+    defaultSize: { width: 250, depth: 250, height: 1600 },
+    sizeOptions: {
+      width: range100(200, 400),
+      depth: range100(200, 400),
+      height: range100(1000, 2200),
+    },
+    tierOptions: [1],
+    defaultTier: 1,
+    frameColors: [],
+    boardColors: [],
+    addOns: [],
+    hideBrand: true,
+  },
+  {
+    id: 'prop_pillar',
+    group: 'prop',
+    category: 'Pillar',
+    name: '기둥',
+    type: 'pillar',
+    // 부스 연출용 장식 각기둥 (받침·머리 포함)
+    defaultSize: { width: 300, depth: 300, height: 2400 },
+    sizeOptions: {
+      width: range100(200, 600),
+      depth: range100(200, 600),
+      height: range100(1000, 3000),
+    },
+    tierOptions: [1],
+    defaultTier: 1,
+    frameColors: [],
+    boardColors: ['white', 'wood', 'black'],
+    addOns: [],
+    hideBrand: true,
+  },
 ];
 
 /* ============================================================
@@ -1776,6 +1816,93 @@ function buildElectricBox(group, p) {
   group.add(label);
 }
 
+// 작은 스탠드 조명 — 받침 + 기둥 + 빛나는 조명 헤드(시각용, 실제 광원 아님)
+function buildLight(group, p) {
+  const w = p.width * MM_TO_M,
+    h = p.height * MM_TO_M,
+    d = p.depth * MM_TO_M;
+  const metal = new THREE.MeshStandardMaterial({
+    color: 0x2a2a2e,
+    metalness: 0.6,
+    roughness: 0.4,
+  });
+  const glow = new THREE.MeshStandardMaterial({
+    color: 0xfff2cc,
+    emissive: 0xffd98a,
+    emissiveIntensity: 0.9,
+    roughness: 0.3,
+  });
+  const rBase = Math.min(w, d) / 2;
+  // 받침 (원형 디스크)
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(rBase, rBase * 1.1, 0.04, 20),
+    metal
+  );
+  base.position.set(0, 0.02, 0);
+  base.castShadow = true;
+  base.receiveShadow = true;
+  group.add(base);
+  // 기둥 (얇은 봉)
+  const poleH = h * 0.82;
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.018, 0.018, poleH, 12),
+    metal
+  );
+  pole.position.set(0, poleH / 2 + 0.04, 0);
+  group.add(pole);
+  // 조명 헤드 (아래로 벌어진 갓)
+  const headR = rBase * 0.75;
+  const headH = headR * 1.2;
+  const headY = h - headH / 2;
+  const head = new THREE.Mesh(
+    new THREE.CylinderGeometry(headR * 0.55, headR, headH, 20),
+    metal
+  );
+  head.position.set(0, headY, 0);
+  head.castShadow = true;
+  group.add(head);
+  // 빛나는 전구 (갓 아래쪽에 노출)
+  const bulb = new THREE.Mesh(
+    new THREE.SphereGeometry(headR * 0.5, 16, 12),
+    glow
+  );
+  bulb.position.set(0, headY - headH * 0.4, 0);
+  group.add(bulb);
+}
+
+// 부스 연출용 장식 각기둥 — 몸통 + 아래 받침 + 위 머리
+function buildPillar(group, p) {
+  const w = p.width * MM_TO_M,
+    h = p.height * MM_TO_M,
+    d = p.depth * MM_TO_M;
+  const mat = new THREE.MeshStandardMaterial({
+    color: BOARD_COLORS[p.boardColor] || 0xffffff,
+    roughness: 0.9,
+  });
+  const capH = Math.min(Math.min(w, d) * 0.25, h * 0.15);
+  const shaftH = h - capH * 2;
+  // 몸통 (살짝 얇은 각기둥)
+  const shaft = new THREE.Mesh(
+    new THREE.BoxGeometry(w * 0.8, shaftH, d * 0.8),
+    mat
+  );
+  shaft.position.set(0, capH + shaftH / 2, 0);
+  shaft.castShadow = true;
+  shaft.receiveShadow = true;
+  group.add(shaft);
+  // 받침·머리 (몸통보다 넓은 각판)
+  const capGeo = new THREE.BoxGeometry(w, capH, d);
+  const bottom = new THREE.Mesh(capGeo, mat);
+  bottom.position.set(0, capH / 2, 0);
+  bottom.castShadow = true;
+  bottom.receiveShadow = true;
+  group.add(bottom);
+  const top = new THREE.Mesh(capGeo, mat);
+  top.position.set(0, h - capH / 2, 0);
+  top.castShadow = true;
+  group.add(top);
+}
+
 function buildChair(group, p) {
   const w = p.width * MM_TO_M,
     h = p.height * MM_TO_M,
@@ -1932,6 +2059,12 @@ function buildProductMesh(p, tpl) {
       break;
     case 'electric':
       buildElectricBox(group, p);
+      break;
+    case 'light':
+      buildLight(group, p);
+      break;
+    case 'pillar':
+      buildPillar(group, p);
       break;
     default:
       buildShelf(group, p, tpl);
@@ -4296,6 +4429,38 @@ function ProductThumb({ type, tpl, product }) {
       >
         <rect x="6" y="3" width="12" height="18" rx="0.8" />
         <path d="M12 7 l-2 4 h3 l-2 4" />
+      </svg>
+    );
+  }
+  if (type === 'light') {
+    // 받침 + 기둥 + 조명 갓
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={common}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.4"
+      >
+        <line x1="12" y1="8" x2="12" y2="20" />
+        <line x1="8" y1="20" x2="16" y2="20" />
+        <path d="M8 8 l4 -5 l4 5 z" />
+      </svg>
+    );
+  }
+  if (type === 'pillar') {
+    // 받침·머리 있는 각기둥
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={common}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.4"
+      >
+        <rect x="6" y="4" width="12" height="2.5" rx="0.3" />
+        <rect x="8" y="6.5" width="8" height="11" />
+        <rect x="6" y="17.5" width="12" height="2.5" rx="0.3" />
       </svg>
     );
   }
