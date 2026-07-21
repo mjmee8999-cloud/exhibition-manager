@@ -308,15 +308,16 @@ const PRODUCT_LIBRARY = [
   {
     id: 'prop_light',
     group: 'prop',
-    category: 'Spotlight',
-    name: '조명',
+    category: 'LED Light',
+    name: 'LED 조명',
     type: 'light',
-    // 바닥에 세우는 작은 스탠드 조명(스포트라이트)
-    defaultSize: { width: 250, depth: 250, height: 1600 },
+    // 벽 위쪽에 붙이는 가로형 LED 바 조명 (마우스로 공중 이동)
+    defaultSize: { width: 1000, depth: 120, height: 80 },
+    // 길이(가로)만 조절, 두께(세로·높이)는 고정·숨김
     sizeOptions: {
-      width: range100(200, 400),
-      depth: range100(200, 400),
-      height: range100(1000, 2200),
+      width: range100(400, 2000),
+      depth: [120],
+      height: [80],
     },
     tierOptions: [1],
     defaultTier: 1,
@@ -324,6 +325,10 @@ const PRODUCT_LIBRARY = [
     boardColors: [],
     addOns: [],
     hideBrand: true,
+    hideDepth: true, // 두께(세로) 숨김
+    hideHeight: true, // 두께(높이) 숨김
+    floating: true, // 마우스로 공중(상하)·좌우 이동
+    defaultY: 2.2, // 벽 상단 근처에서 시작
   },
   {
     id: 'prop_pillar',
@@ -1816,58 +1821,42 @@ function buildElectricBox(group, p) {
   group.add(label);
 }
 
-// 작은 스탠드 조명 — 받침 + 기둥 + 빛나는 조명 헤드(시각용, 실제 광원 아님)
+// 벽 위쪽에 붙이는 가로형 LED 바 조명 — 알루미늄 하우징 + 빛나는 LED 튜브.
+// floating 소품이라 그룹 원점(y=0) 중심 배치 → 물품 위치 y로 벽에 띄운다.
 function buildLight(group, p) {
-  const w = p.width * MM_TO_M,
-    h = p.height * MM_TO_M,
-    d = p.depth * MM_TO_M;
-  const metal = new THREE.MeshStandardMaterial({
-    color: 0x2a2a2e,
+  const w = p.width * MM_TO_M, // 바 길이(가로)
+    h = p.height * MM_TO_M, // 하우징 높이(두께)
+    d = p.depth * MM_TO_M; // 하우징 깊이
+  const housingMat = new THREE.MeshStandardMaterial({
+    color: 0xcfd1d4,
     metalness: 0.6,
-    roughness: 0.4,
+    roughness: 0.45,
   });
-  const glow = new THREE.MeshStandardMaterial({
-    color: 0xfff2cc,
-    emissive: 0xffd98a,
-    emissiveIntensity: 0.9,
+  const ledMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    emissive: 0xfff2cc,
+    emissiveIntensity: 1.0,
     roughness: 0.3,
   });
-  const rBase = Math.min(w, d) / 2;
-  // 받침 (원형 디스크)
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(rBase, rBase * 1.1, 0.04, 20),
-    metal
+  // 알루미늄 하우징 (원점 중심)
+  const housing = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), housingMat);
+  housing.castShadow = true;
+  housing.receiveShadow = true;
+  group.add(housing);
+  // 빛나는 LED 튜브 (앞면에 살짝 튀어나옴)
+  const led = new THREE.Mesh(
+    new THREE.BoxGeometry(w * 0.94, h * 0.5, 0.02),
+    ledMat
   );
-  base.position.set(0, 0.02, 0);
-  base.castShadow = true;
-  base.receiveShadow = true;
-  group.add(base);
-  // 기둥 (얇은 봉)
-  const poleH = h * 0.82;
-  const pole = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.018, 0.018, poleH, 12),
-    metal
+  led.position.set(0, 0, d / 2 + 0.008);
+  group.add(led);
+  // 아래로도 빛이 새도록 하단에도 얇은 발광면
+  const ledDown = new THREE.Mesh(
+    new THREE.BoxGeometry(w * 0.94, 0.015, d * 0.6),
+    ledMat
   );
-  pole.position.set(0, poleH / 2 + 0.04, 0);
-  group.add(pole);
-  // 조명 헤드 (아래로 벌어진 갓)
-  const headR = rBase * 0.75;
-  const headH = headR * 1.2;
-  const headY = h - headH / 2;
-  const head = new THREE.Mesh(
-    new THREE.CylinderGeometry(headR * 0.55, headR, headH, 20),
-    metal
-  );
-  head.position.set(0, headY, 0);
-  head.castShadow = true;
-  group.add(head);
-  // 빛나는 전구 (갓 아래쪽에 노출)
-  const bulb = new THREE.Mesh(
-    new THREE.SphereGeometry(headR * 0.5, 16, 12),
-    glow
-  );
-  bulb.position.set(0, headY - headH * 0.4, 0);
-  group.add(bulb);
+  ledDown.position.set(0, -h / 2 - 0.006, 0);
+  group.add(ledDown);
 }
 
 // 부스 연출용 장식 각기둥 — 몸통 + 아래 받침 + 위 머리
@@ -2794,12 +2783,13 @@ export default function BoothSimulator() {
         boardColor: tpl.boardColors[0],
         text: tpl.defaultText || '', // 설명판 등 문구 입력용
         shape: tpl.defaultShape || 'rect', // 테이블 등 모양(원형/사각)
-        // floating(설명판): 뒷벽 근처에 공중(y≈1.3m)으로 띄워서 시작
+        // floating(설명판·LED조명): 뒷벽 근처에 공중으로 띄워서 시작
+        // (조명은 defaultY로 벽 상단 근처, 설명판은 y≈1.3m)
         position: tpl.floating
           ? {
               x: placeX,
               z: -(booth.depth * MM_TO_M) / 2 + 0.15,
-              y: 1.3,
+              y: tpl.defaultY ?? 1.3,
             }
           : { x: placeX, z: placeZ },
         rotation: 0,
@@ -4433,7 +4423,7 @@ function ProductThumb({ type, tpl, product }) {
     );
   }
   if (type === 'light') {
-    // 받침 + 기둥 + 조명 갓
+    // 벽에 붙는 가로 LED 바 + 아래로 퍼지는 빛
     return (
       <svg
         viewBox="0 0 24 24"
@@ -4442,9 +4432,10 @@ function ProductThumb({ type, tpl, product }) {
         stroke={stroke}
         strokeWidth="1.4"
       >
-        <line x1="12" y1="8" x2="12" y2="20" />
-        <line x1="8" y1="20" x2="16" y2="20" />
-        <path d="M8 8 l4 -5 l4 5 z" />
+        <rect x="3" y="5" width="18" height="3.5" rx="1" />
+        <line x1="6" y1="11" x2="6" y2="14" />
+        <line x1="12" y1="11" x2="12" y2="15" />
+        <line x1="18" y1="11" x2="18" y2="14" />
       </svg>
     );
   }
