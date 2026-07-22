@@ -362,10 +362,25 @@ export default function ShipmentPage() {
     setItems([]);
   };
 
-  // 엑셀 추출: 3개 섹션을 각각 시트로
+  // 엑셀 추출: 3개 섹션을 각각 시트로 (깔끔한 표 디자인)
   const exportExcel = async () => {
-    const XLSX = await import("xlsx");
+    const XLSX = await import("xlsx-js-style");
+    const { styleTableSheet } = await import("@/lib/excelStyle");
     const wb = XLSX.utils.book_new();
+    type Merge = { s: { r: number; c: number }; e: { r: number; c: number } };
+    // 시트 하나를 만들어 스타일까지 입혀 붙이는 도우미 (merges: 같은 값 셀 병합)
+    const addSheet = (
+      data: Record<string, string | number>[],
+      name: string,
+      cols: number[],
+      merges?: Merge[],
+    ) => {
+      const ws = XLSX.utils.json_to_sheet(data);
+      ws["!cols"] = cols.map((wch) => ({ wch }));
+      if (merges && merges.length) ws["!merges"] = merges;
+      styleTableSheet(XLSX.utils, ws);
+      XLSX.utils.book_append_sheet(wb, ws, name);
+    };
 
     // ① 전체 품목
     const s1 = items.map((r, i) => ({
@@ -378,12 +393,16 @@ export default function ShipmentPage() {
       프레임색상: colorKo(r.frameColor),
       수량: r.qty,
     }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s1), "전체 품목");
+    addSheet(s1, "전체 품목", [5, 9, 16, 12, 16, 5, 10, 6]);
 
-    // ② 품목별 BOM
+    // ② 품목별 BOM — 같은 품목은 품목/규격/품목수량 칸을 세로로 병합해 한 칸으로
     const s2: Record<string, string | number>[] = [];
+    const merges2: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
     items.forEach((r) => {
-      (r.bom || []).forEach((p) => {
+      const parts = r.bom || [];
+      if (!parts.length) return;
+      const startRow = s2.length + 1; // +1: 첫 줄은 제목행
+      parts.forEach((p) => {
         s2.push({
           품목: r.kind === "part" ? "추가 파츠" : r.name,
           규격: `${r.width}×${r.depth}×${r.height}`,
@@ -395,17 +414,34 @@ export default function ShipmentPage() {
           합계: (Number(p.qty) || 0) * (Number(r.qty) || 0),
         });
       });
+      const endRow = s2.length;
+      if (parts.length > 1) {
+        // 품목(0열)·규격(1열)·품목수량(6열)을 startRow~endRow 까지 병합
+        [0, 1, 6].forEach((c) =>
+          merges2.push({ s: { r: startRow, c }, e: { r: endRow, c } }),
+        );
+      }
     });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s2), "품목별 BOM");
+    addSheet(s2, "품목별 BOM", [16, 14, 34, 16, 16, 10, 9, 8], merges2);
 
-    // ③ 자재별 BOM
+    // ③ 자재별 BOM — ERP 기타출고요청 양식에 그대로 붙여넣도록 열 구성.
+    //   단위 / 기타출고구분 / 기준단위 / 활동센터는 항상 고정값.
+    const 기타출고구분 = "자가사용( 광고-판관 )";
+    const 활동센터 = "반제품(15동)";
     const s3 = aggregate(items).map((r) => ({
-      부품: r.part,
+      품명: r.part,
+      품번: r.itemNo || "",
       규격: r.spec || "",
-      "품번(ERP)": r.itemNo || "",
-      "총 수량": r.total,
+      단위: "EA",
+      요청수량: r.total,
+      기타출고구분,
+      기준단위: "EA",
+      기준단위수량: r.total,
+      활동센터,
+      비고: "",
+      "LOT No.": "",
     }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s3), "자재별 BOM");
+    addSheet(s3, "자재별 BOM", [30, 16, 16, 6, 10, 20, 9, 12, 16, 10, 12]);
 
     const today = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `${shipment?.name || "전시품목"}_리스트_${today}.xlsx`);

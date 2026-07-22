@@ -68,7 +68,8 @@ export default function BomPage() {
 
   const exportExcel = async () => {
     if (!selected || !bom) return;
-    const XLSX = await import("xlsx");
+    const XLSX = await import("xlsx-js-style");
+    const { styleTableSheet } = await import("@/lib/excelStyle");
     const rows = bom.map((p, i) => ({
       번호: i + 1,
       부품: p.name,
@@ -78,6 +79,8 @@ export default function BomPage() {
     }));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 5 }, { wch: 34 }, { wch: 16 }, { wch: 16 }, { wch: 9 }];
+    styleTableSheet(XLSX.utils, ws);
     XLSX.utils.book_append_sheet(wb, ws, "BOM");
     const safe = (selected.name || "제품").replace(/[\\/:*?"<>|]/g, "_");
     XLSX.writeFile(wb, `BOM_${safe}_${selected.spec}.xlsx`);
