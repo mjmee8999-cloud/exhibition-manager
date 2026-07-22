@@ -26,7 +26,13 @@ type RawItem = {
   boardColor?: string;
 };
 
-type PartRow = { id: string; part: string; qty: number }; // 품목 1개당 수량
+type PartRow = {
+  id: string;
+  part: string;
+  qty: number; // 품목 1개당 수량
+  itemNo?: string; // ERP 품번(실제 BOM을 불러오면 채워짐)
+  spec?: string; // ERP 규격
+};
 
 type LineItem = {
   id: string;
@@ -40,6 +46,11 @@ type LineItem = {
   frameColor: string;
   qty: number;
   bom: PartRow[]; // 이 품목 1개당 부품 목록
+  // ERP 실제 BOM 연결 상태
+  erpMatched?: boolean; // true=실제 SKU 찾음, false=수동확인, undefined=아직 조회 안 함
+  erpSku?: string; // 매칭된 ERP 품번
+  erpName?: string; // 매칭된 ERP 제품 이름
+  erpNote?: string; // 못 찾았을 때 안내
 };
 
 type Shipment = {
@@ -58,6 +69,7 @@ const LEGACY_KEY = "booth_shipments"; // 예전(전시회 구분 없던) 저장�
 const SHELF_NAMES = [
   "일반 선반",
   "바퀴 선반",
+  "트롤리",
   "타공 선반",
   "하단오픈 선반",
   "행거 선반",
@@ -89,8 +101,10 @@ function unitBom(name: string, tier: number): PartRow[] {
     { id: uid(), part: "선반 판", qty: t },
     { id: uid(), part: "연결 빔", qty: t * 4 },
   ];
-  if (name.includes("바퀴")) rows.push({ id: uid(), part: "바퀴(캐스터)", qty: 4 });
+  if (name.includes("바퀴") || name.includes("트롤리"))
+    rows.push({ id: uid(), part: "바퀴(캐스터)", qty: 4 });
   else rows.push({ id: uid(), part: "받침 발", qty: 4 });
+  if (name.includes("트롤리")) rows.push({ id: uid(), part: "손잡이(핸들바)", qty: 1 });
   if (name.includes("타공")) rows.push({ id: uid(), part: "타공판", qty: 1 });
   if (name.includes("행거")) rows.push({ id: uid(), part: "행거 봉", qty: 1 });
   return rows;
@@ -135,18 +149,21 @@ function normalizeItems(list: LineItem[]): LineItem[] {
 }
 
 // ③ 자재별 BOM: 모든 품목의 (1개당 수량 × 품목 수량) 을 부품별로 합산
-function aggregate(items: LineItem[]) {
-  const map = new Map<string, number>();
+//    품번(itemNo)이 있으면 품번 기준으로, 없으면 부품 이름 기준으로 합칩니다.
+type AggRow = { key: string; part: string; itemNo?: string; spec?: string; total: number };
+function aggregate(items: LineItem[]): AggRow[] {
+  const map = new Map<string, AggRow>();
   for (const it of items) {
     for (const p of it.bom || []) {
-      if (!p.part.trim()) continue;
-      map.set(
-        p.part,
-        (map.get(p.part) || 0) + (Number(p.qty) || 0) * (Number(it.qty) || 0)
-      );
+      if (!p.part.trim() && !p.itemNo) continue;
+      const key = p.itemNo ? `no:${p.itemNo}|${p.spec ?? ""}` : `nm:${p.part}`;
+      const add = (Number(p.qty) || 0) * (Number(it.qty) || 0);
+      const cur = map.get(key);
+      if (cur) cur.total += add;
+      else map.set(key, { key, part: p.part, itemNo: p.itemNo, spec: p.spec, total: add });
     }
   }
-  return [...map.entries()].map(([part, total]) => ({ part, total }));
+  return [...map.values()];
 }
 
 export default function ShipmentPage() {
@@ -159,6 +176,10 @@ export default function ShipmentPage() {
 
   const [editItems, setEditItems] = useState(false);
   const [editBom, setEditBom] = useState(false);
+
+  // ERP 실제 BOM 불러오기 상태
+  const [erpBusy, setErpBusy] = useState(false);
+  const [erpMsg, setErpMsg] = useState("");
 
   useEffect(() => {
     if (!storageKey) {
@@ -243,6 +264,72 @@ export default function ShipmentPage() {
     ]);
   const removeItem = (id: string) => updateItems(items.filter((r) => r.id !== id));
 
+  // ── ERP(실제 BOM) 불러오기: 각 선반 품목을 실제 SKU와 매칭해 BOM을 교체 ──
+  const loadErpBom = async () => {
+    const targets = items.filter((r) => r.kind !== "part");
+    if (targets.length === 0) {
+      setErpMsg("불러올 선반 품목이 없어요.");
+      return;
+    }
+    setErpBusy(true);
+    setErpMsg("ERP에서 실제 BOM을 찾는 중...");
+    try {
+      const res = await fetch("/api/erp-bom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: targets.map((r) => ({
+            key: r.id,
+            brand: r.brand,
+            name: r.name,
+            width: r.width,
+            depth: r.depth,
+            height: r.height,
+            frameColor: r.frameColor,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErpMsg("실패: " + (data?.message || "ERP 조회 오류"));
+        return;
+      }
+      const byKey = new Map<string, (typeof data.results)[number]>();
+      for (const r of data.results || []) byKey.set(r.key, r);
+
+      const next = items.map((it) => {
+        const r = byKey.get(it.id);
+        if (!r) return it;
+        if (r.matched) {
+          return {
+            ...it,
+            erpMatched: true,
+            erpSku: r.sku,
+            erpName: r.parentName,
+            erpNote: undefined,
+            bom: (r.bom || []).map((p: { itemNo: string; name: string; spec: string; qty: number }) => ({
+              id: uid(),
+              part: p.name,
+              qty: p.qty,
+              itemNo: p.itemNo,
+              spec: p.spec,
+            })),
+          };
+        }
+        return { ...it, erpMatched: false, erpNote: r.note, erpSku: undefined, erpName: undefined };
+      });
+      updateItems(next);
+
+      const okN = (data.results || []).filter((r: { matched: boolean }) => r.matched).length;
+      const noN = (data.results || []).length - okN;
+      setErpMsg(`✅ 완료 — 매칭 ${okN}개${noN ? `, 수동확인 ${noN}개` : ""}`);
+    } catch (e) {
+      setErpMsg("실패: " + (e instanceof Error ? e.message : "네트워크 오류"));
+    } finally {
+      setErpBusy(false);
+    }
+  };
+
   // ── ② 품목별 BOM(부품) 편집 ──
   const patchPart = (itemId: string, partId: string, patch: Partial<PartRow>) =>
     updateItems(
@@ -301,6 +388,8 @@ export default function ShipmentPage() {
           품목: r.kind === "part" ? "추가 파츠" : r.name,
           규격: `${r.width}×${r.depth}×${r.height}`,
           부품: p.part,
+          부품규격: p.spec || "",
+          "품번(ERP)": p.itemNo || "",
           "1개당 수량": p.qty,
           품목수량: r.qty,
           합계: (Number(p.qty) || 0) * (Number(r.qty) || 0),
@@ -310,7 +399,12 @@ export default function ShipmentPage() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s2), "품목별 BOM");
 
     // ③ 자재별 BOM
-    const s3 = aggregate(items).map((r) => ({ 부품: r.part, "총 수량": r.total }));
+    const s3 = aggregate(items).map((r) => ({
+      부품: r.part,
+      규격: r.spec || "",
+      "품번(ERP)": r.itemNo || "",
+      "총 수량": r.total,
+    }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s3), "자재별 BOM");
 
     const today = new Date().toISOString().slice(0, 10);
@@ -376,6 +470,13 @@ export default function ShipmentPage() {
         {shipment && (
           <div className="flex items-center gap-2">
             <button
+              onClick={loadErpBom}
+              disabled={erpBusy}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+            >
+              {erpBusy ? "불러오는 중..." : "🔩 ERP 실제 BOM 불러오기"}
+            </button>
+            <button
               onClick={exportExcel}
               className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
             >
@@ -417,6 +518,13 @@ export default function ShipmentPage() {
                   ).toFixed(1)}m`
                 : ""}
             </div>
+            {erpMsg && (
+              <div className="mt-2 text-xs font-medium text-blue-700 dark:text-blue-300">{erpMsg}</div>
+            )}
+            <p className="mt-2 text-xs text-zinc-400">
+              💡 <b>「🔩 ERP 실제 BOM 불러오기」</b>를 누르면 각 선반을 규격·종류·색으로 ERP 실제 제품과 맞춰
+              진짜 부품·품번·수량을 채워요. 못 찾은 품목은 <b>❓수동확인</b>으로 표시돼요.
+            </p>
           </div>
 
           {/* ① 전체 품목 */}
@@ -539,7 +647,25 @@ export default function ShipmentPage() {
                       </tr>
                     ) : (
                       <tr key={r.id} className="border-b border-black/5 last:border-0 dark:border-white/5">
-                        <td className="px-3 py-2 font-medium">{r.name}</td>
+                        <td className="px-3 py-2 font-medium">
+                          {r.name}
+                          {r.erpMatched === true && (
+                            <span
+                              title={`${r.erpName || ""} (${r.erpSku || ""})`}
+                              className="ml-2 rounded bg-green-100 px-1.5 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                            >
+                              ✅ ERP {r.erpSku}
+                            </span>
+                          )}
+                          {r.erpMatched === false && (
+                            <span
+                              title={r.erpNote || ""}
+                              className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                            >
+                              ❓ 수동확인
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2">{r.brand || "-"}</td>
                         <td className="px-3 py-2 tabular-nums">
                           {r.width}×{r.depth}×{r.height}
@@ -632,20 +758,24 @@ export default function ShipmentPage() {
                 <thead className="text-xs text-zinc-500">
                   <tr className="border-b border-black/5 dark:border-white/10">
                     <th className="px-3 py-2 text-left font-medium">부품</th>
+                    <th className="px-3 py-2 text-left font-medium">규격</th>
+                    <th className="px-3 py-2 text-left font-medium">품번(ERP)</th>
                     <th className="px-3 py-2 text-right font-medium">총 수량(개)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {agg.length === 0 && (
                     <tr>
-                      <td colSpan={2} className="px-3 py-4 text-center text-zinc-400">
+                      <td colSpan={4} className="px-3 py-4 text-center text-zinc-400">
                         집계할 부품이 없어요.
                       </td>
                     </tr>
                   )}
                   {agg.map((r) => (
-                    <tr key={r.part} className="border-b border-black/5 last:border-0 dark:border-white/5">
+                    <tr key={r.key} className="border-b border-black/5 last:border-0 dark:border-white/5">
                       <td className="px-3 py-2 font-medium">{r.part}</td>
+                      <td className="px-3 py-2 text-zinc-500 tabular-nums">{r.spec || "-"}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-zinc-500">{r.itemNo || "-"}</td>
                       <td className="px-3 py-2 text-right font-semibold tabular-nums">{r.total}</td>
                     </tr>
                   ))}
@@ -738,7 +868,15 @@ function ItemBom({
                 </tr>
               ) : (
                 <tr key={p.id} className="border-t border-black/5 dark:border-white/5">
-                  <td className="px-3 py-1.5">{p.part || "-"}</td>
+                  <td className="px-3 py-1.5">
+                    {p.part || "-"}
+                    {(p.spec || p.itemNo) && (
+                      <span className="ml-1 text-[11px] text-zinc-400">
+                        {p.spec ? p.spec : ""}
+                        {p.itemNo ? ` · ${p.itemNo}` : ""}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{p.qty}</td>
                   <td className="px-3 py-1.5 text-right font-medium tabular-nums">
                     {(Number(p.qty) || 0) * (Number(item.qty) || 0)}

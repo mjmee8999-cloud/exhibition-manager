@@ -48,6 +48,30 @@ export default function Sidebar({
           </div>
           <div className="mt-0.5 text-xs text-blue-100">해외전시회 17,000+ 검색 · 중요도 자동 채점</div>
         </Link>
+
+        {/* BOM 조회 (전시회와 무관한 공용 도구) */}
+        <Link
+          href="/bom"
+          className={
+            "group mt-2 block rounded-xl border px-4 py-3 transition " +
+            (pathname === "/bom"
+              ? "border-transparent bg-emerald-600 text-white"
+              : "border-emerald-500/40 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30")
+          }
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🔩</span>
+            <span className="text-base font-bold">BOM 조회</span>
+            <span className="ml-auto text-lg transition-transform group-hover:translate-x-0.5">→</span>
+          </div>
+          <div
+            className={
+              "mt-0.5 text-xs " + (pathname === "/bom" ? "text-emerald-100" : "text-zinc-400 dark:text-zinc-500")
+            }
+          >
+            제품별 실제 부품·품번 검색 · 엑셀 추출
+          </div>
+        </Link>
       </div>
 
       {/* 전시회 선택 영역 */}

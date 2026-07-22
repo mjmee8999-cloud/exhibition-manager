@@ -80,6 +80,21 @@ const PRODUCT_LIBRARY = [
     addOns: [],
   },
   {
+    id: 'shelf_trolley',
+    brand: 'HOMEDANT HOUSE',
+    category: 'Trolley',
+    name: '트롤리',
+    type: 'trolley',
+    // 바퀴 + 작은 손잡이가 달린 이동식 선반 (바퀴 선반과는 다른 제품)
+    defaultSize: { width: 500, depth: 400, height: 600 },
+    sizeOptions: HOMEDANT_HOUSE_SIZES,
+    tierOptions: [2, 3, 4],
+    defaultTier: 3,
+    frameColors: ['black', 'white'],
+    boardColors: ['wood', 'white'],
+    addOns: [],
+  },
+  {
     id: 'shelf_pegboard',
     brand: 'SPEEDRACK',
     category: 'Pegboard Shelf',
@@ -1289,6 +1304,61 @@ function buildRolling(group, p, tpl) {
   });
 }
 
+// 트롤리: 바퀴 선반(buildRolling)에 뒤쪽 위로 작은 손잡이(핸들바)를 더한 이동식 선반.
+function buildTrolley(group, p, tpl) {
+  const w = p.width * MM_TO_M,
+    d = p.depth * MM_TO_M,
+    h = p.height * MM_TO_M;
+  const wheelR = 0.04;
+  const perforated = (p.brand || tpl.brand) === 'SPEEDRACK';
+  const mats = makeMaterials(p, { perforated });
+  // 바퀴 높이만큼 위로 올림
+  const inner = new THREE.Group();
+  inner.position.y = wheelR * 2;
+  addPosts(inner, w, d, h, mats.frame, 0.025, { postMat: mats.postMat });
+  addTierBoards(inner, w, d, h, p.tier || tpl.defaultTier, mats.board, {
+    frameMat: mats.frame,
+  });
+
+  // 손잡이(핸들바): 뒤쪽 위에 작은 ㄷ자 손잡이
+  const handleH = 0.13; // 프레임 위로 솟은 높이
+  const barR = 0.008;
+  const zBack = -d / 2 + 0.02;
+  const vGeo = new THREE.CylinderGeometry(barR, barR, handleH, 10);
+  [-w / 2 + 0.05, w / 2 - 0.05].forEach((hx) => {
+    const vm = new THREE.Mesh(vGeo, mats.frame);
+    vm.position.set(hx, h + handleH / 2, zBack);
+    vm.castShadow = true;
+    inner.add(vm);
+  });
+  const hGeo = new THREE.CylinderGeometry(barR, barR, w - 0.1, 10);
+  const hm = new THREE.Mesh(hGeo, mats.frame);
+  hm.rotation.z = Math.PI / 2;
+  hm.position.set(0, h + handleH, zBack);
+  hm.castShadow = true;
+  inner.add(hm);
+  group.add(inner);
+
+  // 바퀴 4개
+  const wheelGeo = new THREE.CylinderGeometry(wheelR, wheelR, 0.025, 16);
+  const wheelMat = new THREE.MeshStandardMaterial({
+    color: 0x111111,
+    roughness: 0.6,
+  });
+  const wheelOffset = 0.04;
+  [
+    [-w / 2 + wheelOffset, wheelR, -d / 2 + wheelOffset],
+    [w / 2 - wheelOffset, wheelR, -d / 2 + wheelOffset],
+    [-w / 2 + wheelOffset, wheelR, d / 2 - wheelOffset],
+    [w / 2 - wheelOffset, wheelR, d / 2 - wheelOffset],
+  ].forEach((pos) => {
+    const wm = new THREE.Mesh(wheelGeo, wheelMat);
+    wm.rotation.z = Math.PI / 2;
+    wm.position.set(pos[0], pos[1], pos[2]);
+    group.add(wm);
+  });
+}
+
 /* --- Pegboard panel texture: regular grid of small holes --- */
 let _pegTexCache = {};
 function makePegboardTexture(isBlack) {
@@ -2094,6 +2164,9 @@ function buildProductMesh(p, tpl) {
       break;
     case 'rolling':
       buildRolling(group, p, tpl);
+      break;
+    case 'trolley':
+      buildTrolley(group, p, tpl);
       break;
     case 'pegboard':
       buildPegboard(group, p, tpl);
@@ -4316,6 +4389,24 @@ function ProductThumb({ type, tpl, product }) {
         <rect x="5" y="3" width="14" height="16" rx="0.5" />
         <line x1="5" y1="11" x2="19" y2="11" />
         <circle cx="8" cy="21" r="1.3" />
+        <circle cx="16" cy="21" r="1.3" />
+      </svg>
+    );
+  }
+  if (type === 'trolley') {
+    // 바퀴 + 손잡이
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className={common}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.4"
+      >
+        <path d="M3 4 h3 v3" strokeLinecap="round" />
+        <rect x="6" y="7" width="13" height="12" rx="0.5" />
+        <line x1="6" y1="13" x2="19" y2="13" />
+        <circle cx="9" cy="21" r="1.3" />
         <circle cx="16" cy="21" r="1.3" />
       </svg>
     );
