@@ -9,7 +9,7 @@
 //      ③ 자재별 BOM(①×② 를 부품별로 전부 합산)  →  ERP 기타출고요청에 입력
 //  - 세 섹션 모두 엑셀로 추출할 수 있어요.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
 
@@ -87,30 +87,8 @@ const uid = () =>
     ? crypto.randomUUID()
     : `id_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
 
-// 선반 이름·단수로 "1개당 부품(BOM)" 초안을 만든다. (편집 가능)
-function unitBom(name: string, tier: number): PartRow[] {
-  const t = tier || 1;
-  if (name.includes("연결형")) {
-    return [
-      { id: uid(), part: "선반 판", qty: 1 },
-      { id: uid(), part: "연결 브래킷", qty: 2 },
-    ];
-  }
-  const rows: PartRow[] = [
-    { id: uid(), part: "프레임 기둥", qty: 4 },
-    { id: uid(), part: "선반 판", qty: t },
-    { id: uid(), part: "연결 빔", qty: t * 4 },
-  ];
-  if (name.includes("바퀴") || name.includes("트롤리"))
-    rows.push({ id: uid(), part: "바퀴(캐스터)", qty: 4 });
-  else rows.push({ id: uid(), part: "받침 발", qty: 4 });
-  if (name.includes("트롤리")) rows.push({ id: uid(), part: "손잡이(핸들바)", qty: 1 });
-  if (name.includes("타공")) rows.push({ id: uid(), part: "타공판", qty: 1 });
-  if (name.includes("행거")) rows.push({ id: uid(), part: "행거 봉", qty: 1 });
-  return rows;
-}
-
 // 부스에서 넘어온 원본을 같은 사양끼리 묶어 편집용 품목으로 변환
+// (부품 목록(BOM)은 가짜 예시를 넣지 않고 비워 둡니다. 실제 부품은 ERP에서 자동으로 채워져요.)
 function buildLineItems(raw?: RawItem[]): LineItem[] {
   const map = new Map<string, LineItem>();
   for (const it of raw || []) {
@@ -130,7 +108,7 @@ function buildLineItems(raw?: RawItem[]): LineItem[] {
         tier: it.tier,
         frameColor: it.frameColor || "",
         qty: 1,
-        bom: unitBom(it.name, it.tier),
+        bom: [],
       });
   }
   return [...map.values()];
@@ -141,10 +119,7 @@ function normalizeItems(list: LineItem[]): LineItem[] {
   return list.map((it) => ({
     ...it,
     kind: it.kind || "shelf",
-    bom:
-      it.bom && it.bom.length
-        ? it.bom.map((p) => ({ ...p, id: p.id || uid() }))
-        : unitBom(it.name, it.tier),
+    bom: (it.bom || []).map((p) => ({ ...p, id: p.id || uid() })),
   }));
 }
 
@@ -180,6 +155,11 @@ export default function ShipmentPage() {
   // ERP 실제 BOM 불러오기 상태
   const [erpBusy, setErpBusy] = useState(false);
   const [erpMsg, setErpMsg] = useState("");
+  // 전시회별로 "자동 불러오기를 이미 한 번 시도했는지" 기억(같은 화면에서 중복 호출 방지)
+  const autoKeyRef = useRef<string | null>(null);
+  // 자동 불러오기 대상 리스트를 잠깐 담아두는 곳 + 실행 신호(tick)
+  const autoListRef = useRef<LineItem[] | null>(null);
+  const [autoTick, setAutoTick] = useState(0);
 
   useEffect(() => {
     if (!storageKey) {
@@ -204,9 +184,17 @@ export default function ShipmentPage() {
       const sh = Array.isArray(list) && list.length ? list[0] : null;
       if (sh) {
         setShipment(sh);
-        setItems(
-          sh.lineItems ? normalizeItems(sh.lineItems) : buildLineItems(sh.items)
-        );
+        const built = sh.lineItems ? normalizeItems(sh.lineItems) : buildLineItems(sh.items);
+        setItems(built);
+        // 아직 ERP와 한 번도 맞춰보지 않은 선반이 있으면(=새로 반영된 리스트) 자동 불러오기를 예약.
+        // 실제 호출은 아래 전용 effect 에서 하되, 대상 리스트(built)를 ref 에 담아 정확히 전달한다.
+        const shelves = built.filter((r) => r.kind !== "part");
+        const neverTried = shelves.length > 0 && shelves.every((r) => r.erpMatched === undefined);
+        if (neverTried && autoKeyRef.current !== storageKey) {
+          autoKeyRef.current = storageKey;
+          autoListRef.current = built;
+          setAutoTick((t) => t + 1);
+        }
       } else {
         setShipment(null);
         setItems([]);
@@ -238,10 +226,6 @@ export default function ShipmentPage() {
       items.map((r) => {
         if (r.id !== id) return r;
         const next = { ...r, ...patch };
-        // 선반 종류/단수가 바뀌면 부품(BOM) 초안을 다시 생성 → 세 섹션 자동 연동
-        if ("name" in patch || "tier" in patch) {
-          next.bom = unitBom(next.name, next.tier);
-        }
         return next;
       })
     );
@@ -259,14 +243,14 @@ export default function ShipmentPage() {
         tier: 4,
         frameColor: "white",
         qty: 1,
-        bom: unitBom(SHELF_NAMES[0], 4),
+        bom: [],
       },
     ]);
   const removeItem = (id: string) => updateItems(items.filter((r) => r.id !== id));
 
   // ── ERP(실제 BOM) 불러오기: 각 선반 품목을 실제 SKU와 매칭해 BOM을 교체 ──
-  const loadErpBom = async () => {
-    const targets = items.filter((r) => r.kind !== "part");
+  const loadErpBom = async (list: LineItem[] = items) => {
+    const targets = list.filter((r) => r.kind !== "part");
     if (targets.length === 0) {
       setErpMsg("불러올 선반 품목이 없어요.");
       return;
@@ -297,7 +281,7 @@ export default function ShipmentPage() {
       const byKey = new Map<string, (typeof data.results)[number]>();
       for (const r of data.results || []) byKey.set(r.key, r);
 
-      const next = items.map((it) => {
+      const next = list.map((it) => {
         const r = byKey.get(it.id);
         if (!r) return it;
         if (r.matched) {
@@ -316,7 +300,8 @@ export default function ShipmentPage() {
             })),
           };
         }
-        return { ...it, erpMatched: false, erpNote: r.note, erpSku: undefined, erpName: undefined };
+        // 못 찾은 품목은 가짜 부품을 남기지 않고 비워 둡니다(수동으로 넣을 수 있어요).
+        return { ...it, erpMatched: false, erpNote: r.note, erpSku: undefined, erpName: undefined, bom: [] };
       });
       updateItems(next);
 
@@ -329,6 +314,17 @@ export default function ShipmentPage() {
       setErpBusy(false);
     }
   };
+
+  // ── ERP 실제 BOM 자동 불러오기(실행부) ──
+  // 위 로드 effect 가 autoListRef 에 대상 리스트를 담고 autoTick 을 올리면 여기서 한 번 호출합니다.
+  // 버튼을 누르지 않아도 리스트를 열면 자동으로 진짜 부품이 채워져요.
+  useEffect(() => {
+    const target = autoListRef.current;
+    if (!target) return;
+    autoListRef.current = null;
+    void loadErpBom(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoTick]);
 
   // ── ② 품목별 BOM(부품) 편집 ──
   const patchPart = (itemId: string, partId: string, patch: Partial<PartRow>) =>
@@ -506,11 +502,11 @@ export default function ShipmentPage() {
         {shipment && (
           <div className="flex items-center gap-2">
             <button
-              onClick={loadErpBom}
+              onClick={() => loadErpBom()}
               disabled={erpBusy}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
             >
-              {erpBusy ? "불러오는 중..." : "🔩 ERP 실제 BOM 불러오기"}
+              {erpBusy ? "불러오는 중..." : "🔩 ERP BOM 새로고침"}
             </button>
             <button
               onClick={exportExcel}
@@ -558,8 +554,9 @@ export default function ShipmentPage() {
               <div className="mt-2 text-xs font-medium text-blue-700 dark:text-blue-300">{erpMsg}</div>
             )}
             <p className="mt-2 text-xs text-zinc-400">
-              💡 <b>「🔩 ERP 실제 BOM 불러오기」</b>를 누르면 각 선반을 규격·종류·색으로 ERP 실제 제품과 맞춰
-              진짜 부품·품번·수량을 채워요. 못 찾은 품목은 <b>❓수동확인</b>으로 표시돼요.
+              💡 리스트를 열면 각 선반을 규격·종류·색으로 ERP 실제 제품과 맞춰 진짜 부품·품번·수량을
+              <b> 자동으로</b> 채워요. 품목을 바꾼 뒤 다시 맞추려면 <b>「🔩 ERP BOM 새로고침」</b>을 누르세요.
+              못 찾은 품목은 <b>❓수동확인</b>으로 표시되고 부품칸은 비어 있어요.
             </p>
           </div>
 
