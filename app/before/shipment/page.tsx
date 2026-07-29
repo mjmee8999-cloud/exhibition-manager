@@ -85,6 +85,55 @@ const SHELF_NAMES = [
 const BRANDS = ["스피드랙", "홈던트하우스"];
 const FRAME_COLORS = ["black", "white"];
 
+// 우레탄 망치 — 품목별 BOM 에서는 빼고, "추가 악세서리"로 묶어 관리해요.
+const HAMMER_NO = "2S560CH0248";
+const isHammer = (name?: string, itemNo?: string) =>
+  itemNo === HAMMER_NO || /망치/.test(name || "");
+
+// 「추가 악세서리 반영」 버튼을 누르면 한 칸(카드)에 들어가는 공용 악세서리 목록
+const ACCESSORY_PARTS: { part: string; itemNo: string; spec: string; qty: number }[] = [
+  { part: "공용/부속/신형_커튼봉/N", itemNo: "5S56Z000090", spec: "900(890+3mm)", qty: 1 },
+  { part: "공용/부속/신형_커튼봉/N", itemNo: "5S56Z000120N", spec: "1200(1190+3mm)", qty: 1 },
+  { part: "홈던트/부속/신형_커튼브라켓(좌+우)/N", itemNo: "5S56H00001", spec: "38.7*85.1*33.9/PC투명", qty: 2 },
+  { part: "공용/부속/커튼롤러&핀(각14개_1세트)/N", itemNo: "5S56Z000001", spec: "롤러14/핀14", qty: 2 },
+  { part: "공용/부속/신형_정면커튼_1호/N", itemNo: "5S56Z125175", spec: "1250*1750", qty: 1 },
+  { part: "공용/부속/신형_정면커튼_2호/N", itemNo: "5S56Z125190", spec: "1250*1900", qty: 1 },
+  { part: "공용/부속/신형우레탄망치(중)/N", itemNo: "2S560CH0248", spec: "253*63", qty: 7 },
+  { part: "공용/부속/리버서블C후크/W", itemNo: "2S56W0000002", spec: "백색", qty: 8 },
+  { part: "공용/부속/L형 플레이트/W", itemNo: "2A05G95952", spec: "95.5*95.5*2", qty: 2 },
+  { part: "평두머리볼트(M4)", itemNo: "2A01S4104", spec: "M4*10", qty: 5 },
+  { part: "스피드랙건조기/너트(소)", itemNo: "3T56S000004", spec: "M4(플랜지너트)", qty: 5 },
+  { part: "공용/부속/L형 플레이트/B", itemNo: "3A05B95952", spec: "95.5*95.5*2", qty: 2 },
+  { part: "공용/부속/평두머리볼트(M4)_소/N", itemNo: "2A01S4104", spec: "M4*10", qty: 5 },
+  { part: "공용/부속/플랜지너트(M4)_소/N", itemNo: "3T56S000004", spec: "M4", qty: 5 },
+  { part: "홈던트/부속/코너연결브라켓(좌)/W", itemNo: "3S56W005663L", spec: "58.6*58*60.8", qty: 4 },
+  { part: "홈던트/부속/코너연결브라켓(우)/W", itemNo: "3S56W005663R", spec: "58.6*58*60.8", qty: 4 },
+  { part: "홈던트/부속/기둥연결브라켓/W", itemNo: "5U6C1100003", spec: "백색", qty: 4 },
+  { part: "홈던트/부속/안전좌/W", itemNo: "5U56C110001", spec: "백색", qty: 16 },
+  { part: "홈던트/부속/안전좌/B", itemNo: "5U56B110001", spec: "검정", qty: 16 },
+  { part: "공용/부속/메쉬보드/W", itemNo: "3S56W800400", spec: "800*400", qty: 4 },
+  { part: "홈던트/부속/메쉬보드브라켓/N", itemNo: "3S56T110021", spec: "투명", qty: 18 },
+  { part: "공용/부속/메쉬후크/W", itemNo: "99W99000050", spec: "50", qty: 8 },
+  { part: "공용/부속/에스후크/N", itemNo: "99BS9934684", spec: "34*68*4", qty: 8 },
+  { part: "공용/120/보강대/W", itemNo: "4S23W300040", spec: "400", qty: 8 },
+  { part: "공용/부속/일반바퀴/N", itemNo: "2S56C000023", spec: "2인치", qty: 4 },
+  { part: "공용/부속/브레이크바퀴/N", itemNo: "2S56C000024", spec: "2인치", qty: 4 },
+  { part: "홈던트/부속/바퀴브라켓(2,3인치바퀴용)/N", itemNo: "2S56S0360231", spec: "바퀴브라켓", qty: 4 },
+  { part: "공용/부속/일반바퀴/N", itemNo: "2S56C000025", spec: "3인치", qty: 4 },
+  { part: "공용/부속/브레이크바퀴/N", itemNo: "2S56C000026", spec: "3인치", qty: 4 },
+  { part: "홈던트/부속/바퀴브라켓(2,3인치바퀴용)/N", itemNo: "2S56S0360231", spec: "바퀴브라켓", qty: 4 },
+  { part: "홈던트/부속/기둥고정클립/W", itemNo: "3H56C605029", spec: "60.5*29*29", qty: 8 },
+  { part: "공용/부속/소형조절좌용브라켓/N", itemNo: "2S56S036023", spec: "36*36*23", qty: 8 },
+  { part: "공용/부속/조절좌(건조기+소형조절좌공용)/N", itemNo: "3T56S000007", spec: "M10-25mm", qty: 8 },
+  { part: "홈던트/부속/멀티레일디바이더브라켓/N", itemNo: "2C56S171449", spec: "17*14.85*49.5", qty: 8 },
+  { part: "홈던트/부속/멀티레일디바이더프레임파이프/N", itemNo: "2C56S060370", spec: "6*370", qty: 8 },
+  { part: "받침고정핀/공용", itemNo: "2S456000708", spec: "7π*8mm", qty: 50 },
+  { part: "홈던트/부속/전도방지브라켓/N", itemNo: "2C56S208426", spec: "700~1200mm", qty: 8 },
+  { part: "공용/부속/칼블럭볼트/N", itemNo: "3T56S000001", spec: "M3.5*35", qty: 8 },
+  { part: "홈던트/120/받침/W", itemNo: "3S12C000020V2", spec: "45,035", qty: 10 },
+  { part: "홈던트/080/기둥/W", itemNo: "3U11C000060", spec: "600", qty: 10 },
+];
+
 const colorKo = (c?: string) =>
   c === "white" ? "화이트" : c === "black" ? "블랙" : c || "-";
 
@@ -306,6 +355,31 @@ export default function ShipmentPage() {
     ]);
   const removeItem = (id: string) => updateItems(items.filter((r) => r.id !== id));
 
+  // ── 「추가 악세서리 반영」: 공용 악세서리(커튼·바퀴·망치 등)를 한 칸(카드)으로 추가 ──
+  const addAccessory = () =>
+    updateItems([
+      ...items,
+      {
+        id: uid(),
+        kind: "part",
+        name: "추가 악세서리",
+        brand: "",
+        width: 0,
+        depth: 0,
+        height: 0,
+        tier: 0,
+        frameColor: "",
+        qty: 1,
+        bom: ACCESSORY_PARTS.map((a) => ({
+          id: uid(),
+          part: a.part,
+          qty: a.qty,
+          itemNo: a.itemNo,
+          spec: a.spec,
+        })),
+      },
+    ]);
+
   // ── ERP(실제 BOM) 불러오기: 각 선반 품목을 실제 SKU와 매칭해 BOM을 교체 ──
   const loadErpBom = async (list: LineItem[] = items) => {
     const targets = list.filter((r) => r.kind !== "part");
@@ -353,13 +427,16 @@ export default function ShipmentPage() {
             erpSkuTier: typeof r.skuTier === "number" ? r.skuTier : undefined,
             erpReqTier: typeof r.reqTier === "number" ? r.reqTier : undefined,
             erpTierExact: typeof r.tierExact === "boolean" ? r.tierExact : undefined,
-            bom: (r.bom || []).map((p: { itemNo: string; name: string; spec: string; qty: number }) => ({
-              id: uid(),
-              part: p.name,
-              qty: p.qty,
-              itemNo: p.itemNo,
-              spec: p.spec,
-            })),
+            // 우레탄 망치는 품목별 BOM 에서 빼요(「추가 악세서리」로 따로 관리).
+            bom: (r.bom || [])
+              .filter((p: { name: string; itemNo: string }) => !isHammer(p.name, p.itemNo))
+              .map((p: { itemNo: string; name: string; spec: string; qty: number }) => ({
+                id: uid(),
+                part: p.name,
+                qty: p.qty,
+                itemNo: p.itemNo,
+                spec: p.spec,
+              })),
           };
         }
         // 못 찾은 품목은 가짜 부품을 남기지 않고 비워 둡니다(수동으로 넣을 수 있어요).
@@ -469,8 +546,8 @@ export default function ShipmentPage() {
       구분: r.kind === "part" ? "추가 파츠" : "선반",
       품목: r.name,
       브랜드: r.brand,
-      "규격(W×D×H)": `${r.width}×${r.depth}×${r.height}`,
-      단: r.tier,
+      "규격(W×D×H)": r.kind === "part" ? "-" : `${r.width}×${r.depth}×${r.height}`,
+      단: r.kind === "part" ? "" : r.tier,
       프레임색상: colorKo(r.frameColor),
       수량: r.qty,
     }));
@@ -794,9 +871,11 @@ export default function ShipmentPage() {
                         </td>
                         <td className="px-3 py-2">{r.brand || "-"}</td>
                         <td className="px-3 py-2 tabular-nums">
-                          {r.width}×{r.depth}×{r.height}
+                          {r.kind === "part" ? "-" : `${r.width}×${r.depth}×${r.height}`}
                         </td>
-                        <td className="px-3 py-2 text-center tabular-nums">{r.tier}단</td>
+                        <td className="px-3 py-2 text-center tabular-nums">
+                          {r.kind === "part" ? "-" : `${r.tier}단`}
+                        </td>
                         <td className="px-3 py-2 text-zinc-500">{colorKo(r.frameColor)}</td>
                         <td className="px-3 py-2 text-right font-semibold tabular-nums">×{r.qty}</td>
                       </tr>
@@ -820,9 +899,30 @@ export default function ShipmentPage() {
 
           {/* ② 품목별 BOM */}
           <section className="rounded-2xl border border-black/10 bg-white dark:border-white/10 dark:bg-zinc-900">
-            <div className="flex items-center justify-between gap-2 border-b border-black/10 px-4 py-3 dark:border-white/10">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 px-4 py-3 dark:border-white/10">
               <div className="text-sm font-semibold">② 품목별 BOM</div>
-              {editBtn(editBom, () => setEditBom((v) => !v))}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={addAccessory}
+                  title="공용 악세서리(커튼·바퀴·망치 등)를 한 칸으로 추가해요."
+                  className="rounded-lg border border-violet-500 px-3 py-1.5 text-sm font-medium text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30"
+                >
+                  ＋ 추가 악세서리 반영
+                </button>
+                <button
+                  onClick={toggleSpare}
+                  title="전시회용 예비 부품을 더합니다. 완제품(선반)마다 부품은 +2개, 합판(선반판)은 +1개씩 자재별 BOM에 추가돼요."
+                  className={
+                    "rounded-lg px-3 py-1.5 text-sm font-medium " +
+                    (spare
+                      ? "bg-orange-500 text-white hover:bg-orange-600"
+                      : "border border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30")
+                  }
+                >
+                  {spare ? "✓ 여유분 포함됨" : "＋ 여유분 추가 (부품2·합판1)"}
+                </button>
+                {editBtn(editBom, () => setEditBom((v) => !v))}
+              </div>
             </div>
             <div className="space-y-4 px-4 py-4">
               {shelfItems.length === 0 && partItems.length === 0 && (
@@ -873,30 +973,16 @@ export default function ShipmentPage() {
 
           {/* ③ 자재별 BOM */}
           <section className="rounded-2xl border border-black/10 bg-white dark:border-white/10 dark:bg-zinc-900">
-            <div className="flex flex-wrap items-start justify-between gap-2 border-b border-black/10 px-4 py-3 dark:border-white/10">
-              <div>
-                <div className="text-sm font-semibold">③ 자재별 BOM</div>
-                <div className="mt-0.5 text-xs text-zinc-500">
-                  ERP 내 기타출고요청에 입력합니다. (위 품목·수량을 부품별로 전부 합산한 값이에요.)
-                  {spare && (
-                    <span className="ml-1 font-medium text-orange-600 dark:text-orange-400">
-                      · 여유분 포함(완제품마다 부품+2·합판+1)
-                    </span>
-                  )}
-                </div>
+            <div className="border-b border-black/10 px-4 py-3 dark:border-white/10">
+              <div className="text-sm font-semibold">③ 자재별 BOM</div>
+              <div className="mt-0.5 text-xs text-zinc-500">
+                ERP 내 기타출고요청에 입력합니다. (위 품목·수량을 부품별로 전부 합산한 값이에요.)
+                {spare && (
+                  <span className="ml-1 font-medium text-orange-600 dark:text-orange-400">
+                    · 여유분 포함(완제품마다 부품+2·합판+1)
+                  </span>
+                )}
               </div>
-              <button
-                onClick={toggleSpare}
-                title="전시회용 예비 부품을 더합니다. 완제품(선반)마다 부품은 +2개, 합판(선반판)은 +1개씩 추가돼요."
-                className={
-                  "rounded-lg px-3 py-1.5 text-sm font-medium " +
-                  (spare
-                    ? "bg-orange-500 text-white hover:bg-orange-600"
-                    : "border border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30")
-                }
-              >
-                {spare ? "✓ 여유분 포함됨" : "＋ 여유분 추가 (부품2·합판1)"}
-              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
