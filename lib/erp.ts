@@ -47,6 +47,19 @@ export async function erpGet(pathAndQuery: string): Promise<Record<string, unkno
   return Array.isArray(j) ? j : [];
 }
 
+// ParentSpec 은 "가로*세로*높이*단수S" 형태예요. 예: "1200*400*1800*5S" → 끝의 5S = 5단.
+//  맨 뒤 조각에서 (숫자)S 를 읽어 단수를 돌려줍니다. 2.5S 같은 소수도 처리하고,
+//  형태가 아니면(단수 정보 없음) null 을 돌려줍니다.
+export function parseSpecTier(spec: string): number | null {
+  if (!spec) return null;
+  const segs = String(spec).split("*");
+  const last = (segs[segs.length - 1] ?? "").trim();
+  const m = last.match(/^(\d+(?:\.\d+)?)\s*[Ss]$/);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  return Number.isNaN(n) ? null : n;
+}
+
 export type ErpBomPart = { itemNo: string; name: string; spec: string; qty: number };
 
 // 한 완제품(ParentItemNo)의 BOM(부품 목록)을 가져온다. 같은 부품은 수량 합산.

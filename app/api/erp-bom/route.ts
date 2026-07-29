@@ -8,7 +8,7 @@
 //   2) 서버가 ERP에 로그인 → 각 품목을 규격/브랜드/종류/색으로 실제 SKU와 매칭
 //   3) 매칭되면 그 SKU의 BOM(부품 품번·이름·규격·수량)을 돌려줌. 못 찾으면 "수동확인" 표시.
 
-import { erpGet, fetchBom, erpConfigured, type ErpBomPart } from "@/lib/erp";
+import { erpGet, fetchBom, erpConfigured, parseSpecTier, type ErpBomPart } from "@/lib/erp";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +42,7 @@ type InItem = {
   width: number;
   depth: number;
   height: number;
+  tier?: number; // 요청 단수(예: 5단)
   frameColor?: string;
 };
 
@@ -53,6 +54,9 @@ type MatchResult = {
   parentSpec?: string;
   bom: ErpBomPart[];
   note?: string;
+  skuTier?: number; // 매칭된 SKU 의 단수(규격에서 읽음)
+  reqTier?: number; // 요청 단수
+  tierExact?: boolean; // 단수가 정확히 맞았는지(false=가까운 단수로 근사, undefined=단수 비교 못함)
 };
 
 // 규격 W*D*H 로 후보 SKU를 모두 가져온다(잘림 방지 위해 페이지네이션)
@@ -72,11 +76,21 @@ async function fetchCandidatesBySpec(w: number, d: number, h: number) {
   return [...seen.entries()].map(([no, v]) => ({ no, name: v.name, spec: v.spec }));
 }
 
-// 후보 중 브랜드/종류/색이 맞는 SKU 하나를 고른다
+type PickedSku = {
+  no: string;
+  name: string;
+  spec: string;
+  skuTier: number | null;
+  tierExact: boolean | null; // true=요청 단수와 일치, false=가까운 단수로 근사, null=단수 비교 못함
+};
+
+// 후보 중 브랜드/종류/색이 맞는 SKU 하나를 고른다.
+//  단수(요청 tier)가 있으면: ① 같은 단수 우선 → ② 없으면 가장 가까운 단수(근사, 표시용 tierExact=false)
+//  단수 정보가 규격에 없으면 기존처럼 채널 우선으로만 고른다.
 function pickSku(
   cands: { no: string; name: string; spec: string }[],
   item: InItem,
-): { no: string; name: string; spec: string } | null {
+): PickedSku | null {
   const brandKw = item.brand ? BRAND_KW[item.brand] ?? item.brand : "";
   const tkw = typeKeyword(item.name);
   const color = item.frameColor === "white" ? "W" : item.frameColor === "black" ? "B" : "";
@@ -96,13 +110,39 @@ function pickSku(
 
   const hits = cands.filter(ok);
   if (!hits.length) return null;
-  // 채널 우선순위로 정렬
+
+  // 채널 우선순위(앞일수록 우선)
   const chanRank = (nm: string) => {
     const i = CHANNELS.findIndex((c) => nm.includes(c));
     return i < 0 ? 99 : i;
   };
-  hits.sort((a, b) => chanRank(a.name) - chanRank(b.name));
-  return hits[0];
+  const withTier = hits.map((c) => ({ ...c, t: parseSpecTier(c.spec) }));
+  const pack = (h: (typeof withTier)[number], tierExact: boolean | null): PickedSku => ({
+    no: h.no,
+    name: h.name,
+    spec: h.spec,
+    skuTier: h.t,
+    tierExact,
+  });
+
+  const reqTier = typeof item.tier === "number" && item.tier > 0 ? item.tier : null;
+  if (reqTier != null) {
+    // ① 단수가 정확히 같은 SKU
+    const exact = withTier.filter((c) => c.t === reqTier).sort((a, b) => chanRank(a.name) - chanRank(b.name));
+    if (exact.length) return pack(exact[0], true);
+    // ② 단수 정보가 있는 후보 중 가장 가까운 단수(차이 최소 → 채널 우선)
+    const known = withTier
+      .filter((c) => c.t != null)
+      .sort(
+        (a, b) =>
+          Math.abs((a.t as number) - reqTier) - Math.abs((b.t as number) - reqTier) ||
+          chanRank(a.name) - chanRank(b.name),
+      );
+    if (known.length) return pack(known[0], false);
+  }
+  // 단수 비교가 불가능하거나 요청 단수가 없으면 채널 우선으로만
+  withTier.sort((a, b) => chanRank(a.name) - chanRank(b.name));
+  return pack(withTier[0], null);
 }
 
 export async function POST(request: Request) {
@@ -127,7 +167,7 @@ export async function POST(request: Request) {
     const results: MatchResult[] = [];
 
     for (const it of items) {
-      const sig = `${it.brand ?? ""}|${it.name}|${it.width}x${it.depth}x${it.height}|${it.frameColor ?? ""}`;
+      const sig = `${it.brand ?? ""}|${it.name}|${it.width}x${it.depth}x${it.height}|${it.tier ?? ""}|${it.frameColor ?? ""}`;
       const cached = cache.get(sig);
       if (cached) {
         results.push({ ...cached, key: it.key });
@@ -151,7 +191,17 @@ export async function POST(request: Request) {
           };
         } else {
           const bom = await fetchBom(sku.no);
-          out = { key: it.key, matched: true, sku: sku.no, parentName: sku.name, parentSpec: sku.spec, bom };
+          out = {
+            key: it.key,
+            matched: true,
+            sku: sku.no,
+            parentName: sku.name,
+            parentSpec: sku.spec,
+            bom,
+            skuTier: sku.skuTier ?? undefined,
+            reqTier: typeof it.tier === "number" && it.tier > 0 ? it.tier : undefined,
+            tierExact: sku.tierExact ?? undefined,
+          };
         }
       }
       cache.set(sig, out);

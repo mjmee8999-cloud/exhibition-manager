@@ -53,6 +53,9 @@ type LineItem = {
   erpSku?: string; // 매칭된 ERP 품번
   erpName?: string; // 매칭된 ERP 제품 이름
   erpNote?: string; // 못 찾았을 때 안내
+  erpSkuTier?: number; // 매칭된 SKU 의 단수
+  erpReqTier?: number; // 요청 단수
+  erpTierExact?: boolean; // 단수 일치 여부(false=가까운 단수로 근사)
 };
 
 type Shipment = {
@@ -62,6 +65,7 @@ type Shipment = {
   booth?: { width?: number; depth?: number } | null;
   items?: RawItem[]; // 부스에서 넘어온 원본 (초기화용)
   lineItems?: LineItem[];
+  spare?: boolean; // 여유분 포함 여부(완제품마다 부품+2·합판+1)
 };
 
 // 전시품목은 선택한 전시회별로 따로 저장돼요: `booth_shipments:<전시회id>`
@@ -125,19 +129,46 @@ function normalizeItems(list: LineItem[]): LineItem[] {
   }));
 }
 
+// 합판(선반판)인지 판단 — 여유분을 부품(+2)보다 적게(+1) 넣기 위함
+const isBoardPart = (name: string) => /합판|선반판/.test(name || "");
+
 // ③ 자재별 BOM: 모든 품목의 (1개당 수량 × 품목 수량) 을 부품별로 합산
 //    품번(itemNo)이 있으면 품번 기준으로, 없으면 부품 이름 기준으로 합칩니다.
-type AggRow = { key: string; part: string; itemNo?: string; spec?: string; total: number };
-function aggregate(items: LineItem[]): AggRow[] {
+//    spare=true 면 "완제품마다" 여유분을 더합니다: 완제품(선반)마다 그 제품에 쓰인
+//    부품 종류마다 +2, 합판(선반판)은 +1 (전시회용 예비 부품).
+type AggRow = { key: string; part: string; itemNo?: string; spec?: string; total: number; spare?: number };
+function aggregate(items: LineItem[], spare = false): AggRow[] {
   const map = new Map<string, AggRow>();
+  const bump = (key: string, part: string, itemNo: string | undefined, spec: string | undefined, add: number, sp: number) => {
+    const cur = map.get(key);
+    if (cur) {
+      cur.total += add;
+      cur.spare = (cur.spare || 0) + sp;
+    } else {
+      map.set(key, { key, part, itemNo, spec, total: add, spare: sp });
+    }
+  };
   for (const it of items) {
     for (const p of it.bom || []) {
       if (!p.part.trim() && !p.itemNo) continue;
       const key = p.itemNo ? `no:${p.itemNo}|${p.spec ?? ""}` : `nm:${p.part}`;
       const add = (Number(p.qty) || 0) * (Number(it.qty) || 0);
-      const cur = map.get(key);
-      if (cur) cur.total += add;
-      else map.set(key, { key, part: p.part, itemNo: p.itemNo, spec: p.spec, total: add });
+      bump(key, p.part, p.itemNo, p.spec, add, 0);
+    }
+  }
+  // 여유분: 완제품(선반)마다 그 제품에 쓰인 부품 종류마다 +2 / 합판 +1
+  if (spare) {
+    for (const it of items) {
+      if (it.kind !== "shelf") continue; // 완제품(선반)만
+      const seen = new Set<string>();
+      for (const p of it.bom || []) {
+        if (!p.part.trim() && !p.itemNo) continue;
+        const key = p.itemNo ? `no:${p.itemNo}|${p.spec ?? ""}` : `nm:${p.part}`;
+        if (seen.has(key)) continue; // 같은 제품 안에서 같은 부품은 한 번만
+        seen.add(key);
+        const sp = isBoardPart(p.part) ? 1 : 2;
+        bump(key, p.part, p.itemNo, p.spec, sp, sp);
+      }
     }
   }
   return [...map.values()];
@@ -152,6 +183,8 @@ export default function ShipmentPage() {
 
   const [editItems, setEditItems] = useState(false);
   const [editBom, setEditBom] = useState(false);
+  // 여유분 포함 여부(완제품마다 부품+2·합판+1) — ③ 자재별 BOM/엑셀에 반영
+  const [spare, setSpare] = useState(false);
 
   // ERP 실제 BOM 불러오기 상태
   const [erpBusy, setErpBusy] = useState(false);
@@ -200,6 +233,7 @@ export default function ShipmentPage() {
       if (!alive) return;
       if (sh) {
         setShipment(sh);
+        setSpare(!!sh.spare);
         const built = sh.lineItems ? normalizeItems(sh.lineItems) : buildLineItems(sh.items);
         setItems(built);
         // 아직 ERP와 한 번도 맞춰보지 않은 선반이 있으면(=새로 반영된 리스트) 자동 불러오기를 예약.
@@ -213,6 +247,7 @@ export default function ShipmentPage() {
       } else {
         setShipment(null);
         setItems([]);
+        setSpare(false);
       }
       setLoaded(true);
     })();
@@ -230,6 +265,17 @@ export default function ShipmentPage() {
   const updateItems = (next: LineItem[]) => {
     setItems(next);
     persist(next);
+  };
+
+  // 여유분 포함 켜기/끄기 — 켜면 ③ 자재별 BOM/엑셀에 완제품마다 부품+2·합판+1 이 더해져요.
+  const toggleSpare = () => {
+    const next = !spare;
+    setSpare(next);
+    if (shipment && selected) {
+      const nextSh: Shipment = { ...shipment, spare: next };
+      setShipment(nextSh);
+      saveShipment(selected.id, nextSh);
+    }
   };
 
   // ── ① 전체 품목 편집 ──
@@ -281,6 +327,7 @@ export default function ShipmentPage() {
             width: r.width,
             depth: r.depth,
             height: r.height,
+            tier: r.tier,
             frameColor: r.frameColor,
           })),
         }),
@@ -303,6 +350,9 @@ export default function ShipmentPage() {
             erpSku: r.sku,
             erpName: r.parentName,
             erpNote: undefined,
+            erpSkuTier: typeof r.skuTier === "number" ? r.skuTier : undefined,
+            erpReqTier: typeof r.reqTier === "number" ? r.reqTier : undefined,
+            erpTierExact: typeof r.tierExact === "boolean" ? r.tierExact : undefined,
             bom: (r.bom || []).map((p: { itemNo: string; name: string; spec: string; qty: number }) => ({
               id: uid(),
               part: p.name,
@@ -313,13 +363,29 @@ export default function ShipmentPage() {
           };
         }
         // 못 찾은 품목은 가짜 부품을 남기지 않고 비워 둡니다(수동으로 넣을 수 있어요).
-        return { ...it, erpMatched: false, erpNote: r.note, erpSku: undefined, erpName: undefined, bom: [] };
+        return {
+          ...it,
+          erpMatched: false,
+          erpNote: r.note,
+          erpSku: undefined,
+          erpName: undefined,
+          erpSkuTier: undefined,
+          erpReqTier: undefined,
+          erpTierExact: undefined,
+          bom: [],
+        };
       });
       updateItems(next);
 
-      const okN = (data.results || []).filter((r: { matched: boolean }) => r.matched).length;
-      const noN = (data.results || []).length - okN;
-      setErpMsg(`✅ 완료 — 매칭 ${okN}개${noN ? `, 수동확인 ${noN}개` : ""}`);
+      const results = data.results || [];
+      const okN = results.filter((r: { matched: boolean }) => r.matched).length;
+      const noN = results.length - okN;
+      const approxN = results.filter(
+        (r: { matched: boolean; tierExact?: boolean }) => r.matched && r.tierExact === false,
+      ).length;
+      setErpMsg(
+        `✅ 완료 — 매칭 ${okN}개${approxN ? `(단수 근사 ${approxN}개)` : ""}${noN ? `, 수동확인 ${noN}개` : ""}`,
+      );
     } catch (e) {
       setErpMsg("실패: " + (e instanceof Error ? e.message : "네트워크 오류"));
     } finally {
@@ -443,7 +509,7 @@ export default function ShipmentPage() {
     //   단위 / 기타출고구분 / 기준단위 / 활동센터는 항상 고정값.
     const 기타출고구분 = "자가사용( 광고-판관 )";
     const 활동센터 = "반제품(15동)";
-    const s3 = aggregate(items).map((r) => ({
+    const s3 = aggregate(items, spare).map((r) => ({
       품명: r.part,
       품번: r.itemNo || "",
       규격: r.spec || "",
@@ -453,10 +519,10 @@ export default function ShipmentPage() {
       기준단위: "EA",
       기준단위수량: r.total,
       활동센터,
-      비고: "",
+      비고: spare && r.spare ? `여유분 ${r.spare}개 포함` : "",
       "LOT No.": "",
     }));
-    addSheet(s3, "자재별 BOM", [30, 16, 16, 6, 10, 20, 9, 12, 16, 10, 12]);
+    addSheet(s3, "자재별 BOM", [30, 16, 16, 6, 10, 20, 9, 12, 16, 16, 12]);
 
     const today = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `${shipment?.name || "전시품목"}_리스트_${today}.xlsx`);
@@ -464,7 +530,7 @@ export default function ShipmentPage() {
 
   const shelfItems = items.filter((r) => r.kind !== "part");
   const partItems = items.filter((r) => r.kind === "part");
-  const agg = aggregate(items);
+  const agg = aggregate(items, spare);
   const totalQty = items.reduce((s, r) => s + (Number(r.qty) || 0), 0);
 
   const inputCls =
@@ -717,6 +783,14 @@ export default function ShipmentPage() {
                               ❓ 수동확인
                             </span>
                           )}
+                          {r.erpMatched === true && r.erpTierExact === false && (
+                            <span
+                              title={`요청 ${r.erpReqTier}단과 정확히 맞는 제품이 없어 ${r.erpSkuTier}단으로 대체했어요. BOM을 확인해 주세요.`}
+                              className="ml-2 rounded bg-orange-100 px-1.5 py-0.5 text-[11px] font-medium text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
+                            >
+                              ⚠ 단수 근사 {r.erpReqTier}단→{r.erpSkuTier}단
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2">{r.brand || "-"}</td>
                         <td className="px-3 py-2 tabular-nums">
@@ -799,11 +873,30 @@ export default function ShipmentPage() {
 
           {/* ③ 자재별 BOM */}
           <section className="rounded-2xl border border-black/10 bg-white dark:border-white/10 dark:bg-zinc-900">
-            <div className="border-b border-black/10 px-4 py-3 dark:border-white/10">
-              <div className="text-sm font-semibold">③ 자재별 BOM</div>
-              <div className="mt-0.5 text-xs text-zinc-500">
-                ERP 내 기타출고요청에 입력합니다. (위 품목·수량을 부품별로 전부 합산한 값이에요.)
+            <div className="flex flex-wrap items-start justify-between gap-2 border-b border-black/10 px-4 py-3 dark:border-white/10">
+              <div>
+                <div className="text-sm font-semibold">③ 자재별 BOM</div>
+                <div className="mt-0.5 text-xs text-zinc-500">
+                  ERP 내 기타출고요청에 입력합니다. (위 품목·수량을 부품별로 전부 합산한 값이에요.)
+                  {spare && (
+                    <span className="ml-1 font-medium text-orange-600 dark:text-orange-400">
+                      · 여유분 포함(완제품마다 부품+2·합판+1)
+                    </span>
+                  )}
+                </div>
               </div>
+              <button
+                onClick={toggleSpare}
+                title="전시회용 예비 부품을 더합니다. 완제품(선반)마다 부품은 +2개, 합판(선반판)은 +1개씩 추가돼요."
+                className={
+                  "rounded-lg px-3 py-1.5 text-sm font-medium " +
+                  (spare
+                    ? "bg-orange-500 text-white hover:bg-orange-600"
+                    : "border border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30")
+                }
+              >
+                {spare ? "✓ 여유분 포함됨" : "＋ 여유분 추가 (부품2·합판1)"}
+              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -812,13 +905,14 @@ export default function ShipmentPage() {
                     <th className="px-3 py-2 text-left font-medium">부품</th>
                     <th className="px-3 py-2 text-left font-medium">규격</th>
                     <th className="px-3 py-2 text-left font-medium">품번(ERP)</th>
+                    {spare && <th className="px-3 py-2 text-right font-medium">여유분</th>}
                     <th className="px-3 py-2 text-right font-medium">총 수량(개)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {agg.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-3 py-4 text-center text-zinc-400">
+                      <td colSpan={spare ? 5 : 4} className="px-3 py-4 text-center text-zinc-400">
                         집계할 부품이 없어요.
                       </td>
                     </tr>
@@ -828,6 +922,11 @@ export default function ShipmentPage() {
                       <td className="px-3 py-2 font-medium">{r.part}</td>
                       <td className="px-3 py-2 text-zinc-500 tabular-nums">{r.spec || "-"}</td>
                       <td className="px-3 py-2 font-mono text-xs text-zinc-500">{r.itemNo || "-"}</td>
+                      {spare && (
+                        <td className="px-3 py-2 text-right tabular-nums text-orange-600 dark:text-orange-400">
+                          {r.spare ? `+${r.spare}` : "-"}
+                        </td>
+                      )}
                       <td className="px-3 py-2 text-right font-semibold tabular-nums">{r.total}</td>
                     </tr>
                   ))}
