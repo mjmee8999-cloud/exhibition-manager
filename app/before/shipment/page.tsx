@@ -85,54 +85,11 @@ const SHELF_NAMES = [
 const BRANDS = ["스피드랙", "홈던트하우스"];
 const FRAME_COLORS = ["black", "white"];
 
-// 우레탄 망치 — 품목별 BOM 에서는 빼고, "추가 악세서리"로 묶어 관리해요.
+// 우레탄 망치 — 품목별 BOM 에서는 빼고 따로 관리해요.
 const HAMMER_NO = "2S560CH0248";
 const isHammer = (name?: string, itemNo?: string) =>
   itemNo === HAMMER_NO || /망치/.test(name || "");
 
-// 「추가 악세서리 반영」 버튼을 누르면 한 칸(카드)에 들어가는 공용 악세서리 목록
-const ACCESSORY_PARTS: { part: string; itemNo: string; spec: string; qty: number }[] = [
-  { part: "공용/부속/신형_커튼봉/N", itemNo: "5S56Z000090", spec: "900(890+3mm)", qty: 1 },
-  { part: "공용/부속/신형_커튼봉/N", itemNo: "5S56Z000120N", spec: "1200(1190+3mm)", qty: 1 },
-  { part: "홈던트/부속/신형_커튼브라켓(좌+우)/N", itemNo: "5S56H00001", spec: "38.7*85.1*33.9/PC투명", qty: 2 },
-  { part: "공용/부속/커튼롤러&핀(각14개_1세트)/N", itemNo: "5S56Z000001", spec: "롤러14/핀14", qty: 2 },
-  { part: "공용/부속/신형_정면커튼_1호/N", itemNo: "5S56Z125175", spec: "1250*1750", qty: 1 },
-  { part: "공용/부속/신형_정면커튼_2호/N", itemNo: "5S56Z125190", spec: "1250*1900", qty: 1 },
-  { part: "공용/부속/신형우레탄망치(중)/N", itemNo: "2S560CH0248", spec: "253*63", qty: 7 },
-  { part: "공용/부속/리버서블C후크/W", itemNo: "2S56W0000002", spec: "백색", qty: 8 },
-  { part: "공용/부속/L형 플레이트/W", itemNo: "2A05G95952", spec: "95.5*95.5*2", qty: 2 },
-  { part: "평두머리볼트(M4)", itemNo: "2A01S4104", spec: "M4*10", qty: 5 },
-  { part: "스피드랙건조기/너트(소)", itemNo: "3T56S000004", spec: "M4(플랜지너트)", qty: 5 },
-  { part: "공용/부속/L형 플레이트/B", itemNo: "3A05B95952", spec: "95.5*95.5*2", qty: 2 },
-  { part: "공용/부속/평두머리볼트(M4)_소/N", itemNo: "2A01S4104", spec: "M4*10", qty: 5 },
-  { part: "공용/부속/플랜지너트(M4)_소/N", itemNo: "3T56S000004", spec: "M4", qty: 5 },
-  { part: "홈던트/부속/코너연결브라켓(좌)/W", itemNo: "3S56W005663L", spec: "58.6*58*60.8", qty: 4 },
-  { part: "홈던트/부속/코너연결브라켓(우)/W", itemNo: "3S56W005663R", spec: "58.6*58*60.8", qty: 4 },
-  { part: "홈던트/부속/기둥연결브라켓/W", itemNo: "5U6C1100003", spec: "백색", qty: 4 },
-  { part: "홈던트/부속/안전좌/W", itemNo: "5U56C110001", spec: "백색", qty: 16 },
-  { part: "홈던트/부속/안전좌/B", itemNo: "5U56B110001", spec: "검정", qty: 16 },
-  { part: "공용/부속/메쉬보드/W", itemNo: "3S56W800400", spec: "800*400", qty: 4 },
-  { part: "홈던트/부속/메쉬보드브라켓/N", itemNo: "3S56T110021", spec: "투명", qty: 18 },
-  { part: "공용/부속/메쉬후크/W", itemNo: "99W99000050", spec: "50", qty: 8 },
-  { part: "공용/부속/에스후크/N", itemNo: "99BS9934684", spec: "34*68*4", qty: 8 },
-  { part: "공용/120/보강대/W", itemNo: "4S23W300040", spec: "400", qty: 8 },
-  { part: "공용/부속/일반바퀴/N", itemNo: "2S56C000023", spec: "2인치", qty: 4 },
-  { part: "공용/부속/브레이크바퀴/N", itemNo: "2S56C000024", spec: "2인치", qty: 4 },
-  { part: "홈던트/부속/바퀴브라켓(2,3인치바퀴용)/N", itemNo: "2S56S0360231", spec: "바퀴브라켓", qty: 4 },
-  { part: "공용/부속/일반바퀴/N", itemNo: "2S56C000025", spec: "3인치", qty: 4 },
-  { part: "공용/부속/브레이크바퀴/N", itemNo: "2S56C000026", spec: "3인치", qty: 4 },
-  { part: "홈던트/부속/바퀴브라켓(2,3인치바퀴용)/N", itemNo: "2S56S0360231", spec: "바퀴브라켓", qty: 4 },
-  { part: "홈던트/부속/기둥고정클립/W", itemNo: "3H56C605029", spec: "60.5*29*29", qty: 8 },
-  { part: "공용/부속/소형조절좌용브라켓/N", itemNo: "2S56S036023", spec: "36*36*23", qty: 8 },
-  { part: "공용/부속/조절좌(건조기+소형조절좌공용)/N", itemNo: "3T56S000007", spec: "M10-25mm", qty: 8 },
-  { part: "홈던트/부속/멀티레일디바이더브라켓/N", itemNo: "2C56S171449", spec: "17*14.85*49.5", qty: 8 },
-  { part: "홈던트/부속/멀티레일디바이더프레임파이프/N", itemNo: "2C56S060370", spec: "6*370", qty: 8 },
-  { part: "받침고정핀/공용", itemNo: "2S456000708", spec: "7π*8mm", qty: 50 },
-  { part: "홈던트/부속/전도방지브라켓/N", itemNo: "2C56S208426", spec: "700~1200mm", qty: 8 },
-  { part: "공용/부속/칼블럭볼트/N", itemNo: "3T56S000001", spec: "M3.5*35", qty: 8 },
-  { part: "홈던트/120/받침/W", itemNo: "3S12C000020V2", spec: "45,035", qty: 10 },
-  { part: "홈던트/080/기둥/W", itemNo: "3U11C000060", spec: "600", qty: 10 },
-];
 
 const colorKo = (c?: string) =>
   c === "white" ? "화이트" : c === "black" ? "블랙" : c || "-";
@@ -354,31 +311,6 @@ export default function ShipmentPage() {
       },
     ]);
   const removeItem = (id: string) => updateItems(items.filter((r) => r.id !== id));
-
-  // ── 「추가 악세서리 반영」: 공용 악세서리(커튼·바퀴·망치 등)를 한 칸(카드)으로 추가 ──
-  const addAccessory = () =>
-    updateItems([
-      ...items,
-      {
-        id: uid(),
-        kind: "part",
-        name: "추가 악세서리",
-        brand: "",
-        width: 0,
-        depth: 0,
-        height: 0,
-        tier: 0,
-        frameColor: "",
-        qty: 1,
-        bom: ACCESSORY_PARTS.map((a) => ({
-          id: uid(),
-          part: a.part,
-          qty: a.qty,
-          itemNo: a.itemNo,
-          spec: a.spec,
-        })),
-      },
-    ]);
 
   // ── ERP(실제 BOM) 불러오기: 각 선반 품목을 실제 SKU와 매칭해 BOM을 교체 ──
   const loadErpBom = async (list: LineItem[] = items) => {
@@ -903,15 +835,8 @@ export default function ShipmentPage() {
               <div className="text-sm font-semibold">② 품목별 BOM</div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={addAccessory}
-                  title="공용 악세서리(커튼·바퀴·망치 등)를 한 칸으로 추가해요."
-                  className="rounded-lg border border-violet-500 px-3 py-1.5 text-sm font-medium text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30"
-                >
-                  ＋ 추가 악세서리 반영
-                </button>
-                <button
                   onClick={toggleSpare}
-                  title="전시회용 예비 부품을 더합니다. 완제품(선반)마다 부품은 +2개, 합판(선반판)은 +1개씩 자재별 BOM에 추가돼요."
+                  title="전시회용 예비 부품을 더합니다. 완제품(선반)마다 부품은 +2개, 합판(선반판)은 +1개씩 품목별·자재별 BOM에 추가돼요."
                   className={
                     "rounded-lg px-3 py-1.5 text-sm font-medium " +
                     (spare
@@ -941,6 +866,8 @@ export default function ShipmentPage() {
                   onRemove={(pid) => removePart(it.id, pid)}
                   inputCls={inputCls}
                   numCls={numCls}
+                  spare={spare}
+                  isShelf
                 />
               ))}
               </div>
@@ -963,6 +890,8 @@ export default function ShipmentPage() {
                         onRemove={(pid) => removePart(it.id, pid)}
                         inputCls={inputCls}
                         numCls={numCls}
+                        spare={spare}
+                        isShelf={false}
                       />
                     ))}
                   </div>
@@ -1037,6 +966,8 @@ function ItemBom({
   onRemove,
   inputCls,
   numCls,
+  spare,
+  isShelf,
 }: {
   item: LineItem;
   title: string;
@@ -1047,7 +978,25 @@ function ItemBom({
   onRemove: (partId: string) => void;
   inputCls: string;
   numCls: string;
+  spare: boolean;
+  isShelf: boolean;
 }) {
+  // 여유분: 완제품(선반)일 때만, 부품 종류마다 +2 / 합판 +1 (같은 부품은 한 번만)
+  const spareByRow = new Map<string, number>();
+  if (spare && isShelf) {
+    const seen = new Set<string>();
+    for (const p of item.bom || []) {
+      const key = p.itemNo ? `no:${p.itemNo}|${p.spec ?? ""}` : `nm:${p.part}`;
+      if (seen.has(key)) {
+        spareByRow.set(p.id, 0);
+        continue;
+      }
+      seen.add(key);
+      spareByRow.set(p.id, isBoardPart(p.part) ? 1 : 2);
+    }
+  }
+  const rowTotal = (p: PartRow) =>
+    (Number(p.qty) || 0) * (Number(item.qty) || 0) + (spareByRow.get(p.id) || 0);
   return (
     <div className="rounded-xl border border-black/10 dark:border-white/10">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-black/5 px-3 py-2 dark:border-white/10">
@@ -1092,7 +1041,10 @@ function ItemBom({
                     />
                   </td>
                   <td className="px-3 py-1 text-right tabular-nums text-zinc-500">
-                    {(Number(p.qty) || 0) * (Number(item.qty) || 0)}
+                    {rowTotal(p)}
+                    {spareByRow.get(p.id) ? (
+                      <span className="ml-1 text-[11px] text-orange-500">+{spareByRow.get(p.id)}</span>
+                    ) : null}
                   </td>
                   <td className="px-2 py-1 text-right">
                     <button
@@ -1116,7 +1068,12 @@ function ItemBom({
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{p.qty}</td>
                   <td className="px-3 py-1.5 text-right font-medium tabular-nums">
-                    {(Number(p.qty) || 0) * (Number(item.qty) || 0)}
+                    {rowTotal(p)}
+                    {spareByRow.get(p.id) ? (
+                      <span className="ml-1 text-[11px] font-normal text-orange-500">
+                        (여유 +{spareByRow.get(p.id)})
+                      </span>
+                    ) : null}
                   </td>
                 </tr>
               )
