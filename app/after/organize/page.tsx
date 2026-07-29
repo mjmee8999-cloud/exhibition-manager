@@ -5,46 +5,42 @@
 //  - 행을 누르면 상세 창이 열려 명함을 크게 보고, 내용을 수정할 수 있어요.
 //  - 오른쪽 위 "엑셀 추출" 버튼으로 .xlsx 파일을 내려받습니다.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
-import ConsultationFormFields from "@/components/ConsultationFormFields";
-import { GradeBadge } from "@/components/formControls";
+import ConsultationDetailModal from "@/components/ConsultationDetailModal";
+import { GradeBadge, LeadBadge } from "@/components/formControls";
 import {
   consultationDate,
-  EMPTY_FORM,
   formatDate,
   joinList,
+  leadStatusOf,
+  LEAD_STATUSES,
   PRODUCTS,
-  resizeImage,
-  toFormState,
   type Consultation,
-  type FormState,
 } from "@/lib/consultation";
 import {
   listConsultations,
   saveConsultation,
   deleteConsultation,
+  migrateConsultationCards,
 } from "@/lib/consultationStore";
 
 export default function OrganizePage() {
   const { selected } = useExhibitions();
 
   const [records, setRecords] = useState<Consultation[]>([]);
+  const [migrating, setMigrating] = useState(false); // 예전 명함을 창고로 옮기는 중
 
-  // 상세/수정 창 상태
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<FormState>({ ...EMPTY_FORM });
-  const [editCardImage, setEditCardImage] = useState<string>("");
-  const [editLookupStatus, setEditLookupStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
-  const [editLookupMsg, setEditLookupMsg] = useState("");
-  const replaceInputRef = useRef<HTMLInputElement>(null);
+  // 상세/수정 창 상태 (열려 있는 상담일지)
+  const [editRecord, setEditRecord] = useState<Consultation | null>(null);
 
   // 검색 · 필터 · 정렬 상태
   const [query, setQuery] = useState("");
   const [fImportance, setFImportance] = useState("");
   const [fInterest, setFInterest] = useState("");
   const [fProduct, setFProduct] = useState("");
+  const [fStatus, setFStatus] = useState("");
   const [sortBy, setSortBy] = useState<"recent" | "old" | "importance" | "company">("recent");
 
   useEffect(() => {
@@ -54,9 +50,21 @@ export default function OrganizePage() {
       return;
     }
     let alive = true;
-    listConsultations(exId).then((list) => {
-      if (alive) setRecords(list);
-    });
+    (async () => {
+      let list = await listConsultations(exId);
+      if (!alive) return;
+      setRecords(list);
+      // 예전 자료(명함이 DB 안에 base64로 든 것)를 자동으로 창고(Storage)로 옮깁니다.
+      if (list.some((r) => (r.cardImage ?? "").startsWith("data:"))) {
+        setMigrating(true);
+        const changed = await migrateConsultationCards(exId, list);
+        if (changed) {
+          list = await listConsultations(exId);
+          if (alive) setRecords(list);
+        }
+        if (alive) setMigrating(false);
+      }
+    })();
     return () => {
       alive = false;
     };
@@ -64,91 +72,20 @@ export default function OrganizePage() {
 
   function handleDelete(id: string) {
     if (!confirm("이 상담일지를 삭제할까요? 되돌릴 수 없어요.")) return;
+    const target = records.find((r) => r.id === id);
     setRecords((prev) => prev.filter((r) => r.id !== id)); // 화면에 바로 반영
-    deleteConsultation(id); // 뒤에서 DB에서 삭제
-    if (editId === id) closeEdit();
+    deleteConsultation(id, target?.cardPath); // 뒤에서 DB + 창고 파일 삭제
+    if (editRecord?.id === id) setEditRecord(null);
   }
 
-  // 상세/수정 창 열기
-  function openEdit(record: Consultation) {
-    setEditId(record.id);
-    setEditForm(toFormState(record));
-    setEditCardImage(record.cardImage);
-    setEditLookupStatus("idle");
-    setEditLookupMsg("");
-  }
-
-  function closeEdit() {
-    setEditId(null);
-  }
-
-  // 수정 내용 저장
-  function handleUpdate() {
-    if (!editId) return;
-    const original = records.find((r) => r.id === editId);
-    if (!original) return;
-    const updated: Consultation = {
-      id: original.id,
-      createdAt: original.createdAt,
-      cardImage: editCardImage,
-      ...editForm,
-    };
-    setRecords((prev) => prev.map((r) => (r.id === editId ? updated : r))); // 화면에 바로 반영
-    if (selected) saveConsultation(selected.id, updated); // 뒤에서 DB에 저장
-    closeEdit();
-  }
-
-  // 수정 창에서 명함 교체
-  async function handleReplaceCard(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const dataUrl = await resizeImage(file, 1000);
-      setEditCardImage(dataUrl);
-    } catch {
-      alert("사진을 불러올 수 없어요.");
-    }
-    if (replaceInputRef.current) replaceInputRef.current.value = "";
-  }
-
-  // 수정 창에서 업체 정보 AI 자동 조회
-  async function handleEditLookup() {
-    if (!editForm.company.trim()) {
-      setEditLookupStatus("error");
-      setEditLookupMsg("회사명을 먼저 입력해 주세요.");
-      return;
-    }
-    setEditLookupStatus("loading");
-    setEditLookupMsg("AI가 웹에서 업체 정보를 찾고 있어요...");
-    try {
-      const res = await fetch("/api/lookup-company", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: editForm.company.trim() }),
+  // 상세/수정 창에서 "수정 저장"을 누르면 실행 (공통 모달이 완성된 상담일지를 넘겨줌)
+  function handleSaveEdit(updated: Consultation) {
+    setRecords((prev) => prev.map((r) => (r.id === updated.id ? updated : r))); // 화면에 바로 반영
+    if (selected) {
+      saveConsultation(selected.id, updated).then((saved) => {
+        // 명함 주소(공개 URL) 등 최종 저장본으로 목록을 맞춰줍니다.
+        setRecords((prev) => prev.map((r) => (r.id === saved.id ? saved : r)));
       });
-      const json = await res.json();
-      if (!res.ok) {
-        setEditLookupStatus("error");
-        setEditLookupMsg(json.message || "조회에 실패했어요. 직접 입력해 주세요.");
-        return;
-      }
-      const d = json.data ?? {};
-      setEditForm((prev) => ({
-        ...prev,
-        companyType: d.companyType || prev.companyType,
-        companyTypeDetail: d.companyTypeDetail || prev.companyTypeDetail,
-        homepage: d.homepage || prev.homepage,
-        revenue: d.revenue || prev.revenue,
-        salesChannels:
-          Array.isArray(d.salesChannels) && d.salesChannels.length
-            ? Array.from(new Set([...prev.salesChannels, ...d.salesChannels]))
-            : prev.salesChannels,
-      }));
-      setEditLookupStatus("ok");
-      setEditLookupMsg("✅ 조회 완료");
-    } catch {
-      setEditLookupStatus("error");
-      setEditLookupMsg("AI 서버에 연결하지 못했어요. 직접 입력해 주세요.");
     }
   }
 
@@ -159,6 +96,7 @@ export default function OrganizePage() {
       if (fImportance && r.importance !== fImportance) return false;
       if (fInterest && r.interestLevel !== fInterest) return false;
       if (fProduct && !(r.interests ?? []).includes(fProduct)) return false;
+      if (fStatus && leadStatusOf(r) !== fStatus) return false;
       if (query.trim()) {
         const q = query.trim().toLowerCase();
         const hay = [
@@ -198,6 +136,7 @@ export default function OrganizePage() {
     setFImportance("");
     setFInterest("");
     setFProduct("");
+    setFStatus("");
     setSortBy("recent");
   }
 
@@ -224,6 +163,9 @@ export default function OrganizePage() {
       중요도: r.importance,
       관심도: r.interestLevel,
       상담메모: r.memo,
+      후속상태: leadStatusOf(r),
+      "다음 할 일": r.nextAction ?? "",
+      "다음 할 일 예정일": r.nextActionDate ?? "",
       명함: r.cardImage ? "있음" : "없음",
       저장일시: formatDate(r.createdAt),
     }));
@@ -285,6 +227,12 @@ export default function OrganizePage() {
         </span>
       </div>
 
+      {migrating && (
+        <div className="mt-3 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+          ⏳ 예전 명함 사진을 사진 창고로 옮기는 중이에요… (한 번만 진행돼요)
+        </div>
+      )}
+
       {records.length === 0 ? (
         <div className="mt-8 rounded-3xl border border-dashed border-black/15 bg-black/[0.02] p-12 text-center dark:border-white/15 dark:bg-white/[0.03]">
           <p className="text-lg text-zinc-600 dark:text-zinc-400">아직 저장된 상담일지가 없어요.</p>
@@ -306,7 +254,15 @@ export default function OrganizePage() {
               placeholder="🔍 회사명 · 담당자 · 이메일 · 연락처 · 메모 등으로 검색"
               className="w-full rounded-xl border border-black/15 bg-white px-4 py-2.5 text-base dark:border-white/15 dark:bg-zinc-900"
             />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className={selectCls}>
+                <option value="">후속상태 전체</option>
+                {LEAD_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
               <select value={fImportance} onChange={(e) => setFImportance(e.target.value)} className={selectCls}>
                 <option value="">중요도 전체</option>
                 <option value="A">중요도 A</option>
@@ -338,7 +294,7 @@ export default function OrganizePage() {
                 <option value="company">회사명순</option>
               </select>
             </div>
-            {(query || fImportance || fInterest || fProduct || sortBy !== "recent") && (
+            {(query || fImportance || fInterest || fProduct || fStatus || sortBy !== "recent") && (
               <button type="button" onClick={resetFilters} className="text-sm text-blue-600 hover:underline">
                 필터 초기화
               </button>
@@ -357,6 +313,7 @@ export default function OrganizePage() {
               <thead>
                 <tr className="bg-black/[0.03] text-left dark:bg-white/[0.05]">
                   <Th>#</Th>
+                  <Th>후속상태</Th>
                   <Th>상담일자</Th>
                   <Th>명함</Th>
                   <Th>회사명</Th>
@@ -378,10 +335,13 @@ export default function OrganizePage() {
                 {filtered.map((r, i) => (
                   <tr
                     key={r.id}
-                    onClick={() => openEdit(r)}
+                    onClick={() => setEditRecord(r)}
                     className="cursor-pointer border-t border-black/10 align-top hover:bg-blue-50/40 dark:border-white/10 dark:hover:bg-blue-950/20"
                   >
                     <Td>{i + 1}</Td>
+                    <Td>
+                      <LeadBadge status={leadStatusOf(r)} />
+                    </Td>
                     <Td className="whitespace-nowrap text-zinc-600 dark:text-zinc-300">
                       {consultationDate(r) || "-"}
                     </Td>
@@ -441,123 +401,14 @@ export default function OrganizePage() {
         </>
       )}
 
-      {/* ── 상세 / 수정 창 ─────────────────────── */}
-      {editId && (
-        <div
-          onClick={closeEdit}
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:p-8"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="my-4 w-full max-w-5xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-950 sm:p-8"
-          >
-            {/* 창 헤더 */}
-            <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-2xl font-bold">상담일지 상세 · 수정</h2>
-              <label className="ml-auto flex items-center gap-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                📅 상담 일자
-                <input
-                  type="date"
-                  value={editForm.consultDate}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, consultDate: e.target.value }))}
-                  className="rounded-xl border border-black/15 bg-white px-3 py-2 text-base text-zinc-900 dark:border-white/15 dark:bg-zinc-900 dark:text-zinc-100"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={closeEdit}
-                className="rounded-full px-3 py-1 text-2xl text-zinc-400 hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"
-                aria-label="닫기"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* 명함 크게 보기 */}
-            <section className="mt-5 rounded-2xl border border-black/10 p-6 dark:border-white/10">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-lg font-semibold text-blue-600">📇 명함</h3>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => replaceInputRef.current?.click()}
-                    className="rounded-lg border border-black/15 px-3 py-1.5 text-sm hover:bg-black/[0.05] dark:border-white/15 dark:hover:bg-white/[0.06]"
-                  >
-                    명함 교체
-                  </button>
-                  {editCardImage && (
-                    <button
-                      type="button"
-                      onClick={() => setEditCardImage("")}
-                      className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/30"
-                    >
-                      명함 제거
-                    </button>
-                  )}
-                </div>
-              </div>
-              <input
-                ref={replaceInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleReplaceCard}
-                className="hidden"
-              />
-              <div className="mt-4 flex justify-center">
-                {editCardImage ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={editCardImage}
-                    alt="명함 크게 보기"
-                    className="max-h-[55vh] w-auto max-w-full rounded-xl object-contain"
-                  />
-                ) : (
-                  <div className="w-full rounded-xl border border-dashed border-black/15 py-16 text-center text-zinc-400 dark:border-white/15">
-                    등록된 명함이 없어요. "명함 교체"로 추가할 수 있어요.
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* 입력 항목 본문 (작성 화면과 동일) */}
-            <div className="mt-6">
-              <ConsultationFormFields
-                form={editForm}
-                setForm={setEditForm}
-                onLookup={handleEditLookup}
-                lookupStatus={editLookupStatus}
-                lookupMsg={editLookupMsg}
-              />
-            </div>
-
-            {/* 창 하단 버튼 */}
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                type="button"
-                onClick={() => handleDelete(editId)}
-                className="rounded-xl border border-red-300 px-5 py-3 text-base text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/30"
-              >
-                🗑 이 일지 삭제
-              </button>
-              <div className="flex gap-3 sm:ml-auto">
-                <button
-                  type="button"
-                  onClick={closeEdit}
-                  className="rounded-xl border border-black/15 px-6 py-3 text-base hover:bg-black/[0.05] dark:border-white/15 dark:hover:bg-white/[0.06]"
-                >
-                  취소
-                </button>
-                <button
-                  type="button"
-                  onClick={handleUpdate}
-                  className="rounded-xl bg-blue-600 px-8 py-3 text-base font-semibold text-white hover:bg-blue-700"
-                >
-                  수정 저장
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* ── 상세 / 수정 창 (공통 컴포넌트) ─────────────── */}
+      {editRecord && (
+        <ConsultationDetailModal
+          record={editRecord}
+          onClose={() => setEditRecord(null)}
+          onSave={handleSaveEdit}
+          onDelete={handleDelete}
+        />
       )}
     </main>
   );

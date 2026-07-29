@@ -54,3 +54,18 @@ export async function deleteDesign(id) {
   );
   if (!res.ok) throw new Error(`디자인 삭제 실패 (${res.status})`);
 }
+
+// ─── 전시 품목(Shipment) ───
+// 표 구조:  booth_shipments(exhibition_id text PK, data jsonb, updated_at)
+//   - 전시회당 1건만 유지(같은 전시회면 덮어씀). 그래서 exhibition_id 를 기준으로 upsert.
+const SHIPMENT_TABLE = 'booth_shipments';
+
+// 「전시 품목 리스트 반영」으로 만든 품목을 DB에 저장합니다(모두 공유).
+export async function saveShipment(exId, shipment) {
+  const res = await fetch(`${SB_URL}/rest/v1/${SHIPMENT_TABLE}`, {
+    method: 'POST',
+    headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify({ exhibition_id: exId, data: shipment }),
+  });
+  if (!res.ok) throw new Error(`전시 품목 저장 실패 (${res.status})`);
+}

@@ -5,11 +5,29 @@
 // A/B/C 등급 (중요도·관심도)
 export type Grade = "" | "A" | "B" | "C";
 
+// 리드(고객) 후속 단계 — 명함이 실제 거래로 이어지는 과정을 추적합니다.
+//  ※ 단계 이름을 바꾸거나 늘리려면 이 배열만 고치면 보드·표에 자동 반영돼요.
+export const LEAD_STATUSES = [
+  "신규",
+  "팔로우업 메일 송부",
+  "회신 옴",
+  "견적/샘플 발송",
+  "지속 대응",
+  "보류/종료",
+] as const;
+export type LeadStatus = (typeof LEAD_STATUSES)[number];
+
 // 상담일지 한 건의 정보 형태
 export type Consultation = {
   id: string;
   createdAt: string;
+  // 화면 표시용 명함 이미지.
+  //  - 새로 찍었을 때: data URL(base64) — 저장하면서 Storage(창고)로 올라감
+  //  - 불러올 때: Storage 공개 URL(https://...)
   cardImage: string;
+  // 명함 파일이 Storage 창고 어디에 있는지(예: ex123/uuid.jpg). 삭제·재조회에 씀.
+  //  - 예전 자료(창고 이전 전)엔 없을 수 있어요(그땐 cardImage에 base64가 그대로 들어있음).
+  cardPath?: string;
   // 상담 일자 (YYYY-MM-DD, 사용자가 직접 선택 / 기본값은 오늘)
   consultDate: string;
   // 고객 정보 (명함에서 AI 자동 인식)
@@ -36,10 +54,23 @@ export type Consultation = {
   interestLevel: Grade;
   // 상담 메모
   memo: string;
+  // ── 후속(리드) 관리 ──
+  status?: LeadStatus; // 후속 단계 (LEAD_STATUSES 중 하나, 없으면 "신규"로 봄)
+  nextAction?: string; // 다음 할 일 메모 (예: "견적서 발송", "3주 뒤 재연락")
+  nextActionDate?: string; // 다음 할 일 예정일 (YYYY-MM-DD)
 };
 
-// 화면 입력값 형태 (id·저장시각·명함이미지는 별도 관리)
-export type FormState = Omit<Consultation, "id" | "createdAt" | "cardImage">;
+// 화면 입력값 형태 (id·저장시각·명함이미지/경로·후속상태는 별도 관리)
+export type FormState = Omit<
+  Consultation,
+  "id" | "createdAt" | "cardImage" | "cardPath" | "status" | "nextAction" | "nextActionDate"
+>;
+
+// 상담일지의 현재 후속 단계를 돌려줍니다. (값이 없으면 첫 단계 "신규")
+export function leadStatusOf(c: Consultation): LeadStatus {
+  const s = c.status;
+  return s && (LEAD_STATUSES as readonly string[]).includes(s) ? s : LEAD_STATUSES[0];
+}
 
 // 여러 항목을 고르는 체크박스 필드 이름들
 export type ListField = "salesChannels" | "interests" | "inquiries";
@@ -123,9 +154,22 @@ export function consultationDate(c: Consultation): string {
 
 // 하나의 상담일지에서 입력값(FormState) 부분만 뽑아냅니다.
 export function toFormState(c: Consultation): FormState {
-  const { id: _id, createdAt: _createdAt, cardImage: _cardImage, ...rest } = c;
+  const {
+    id: _id,
+    createdAt: _createdAt,
+    cardImage: _cardImage,
+    cardPath: _cardPath,
+    status: _status,
+    nextAction: _nextAction,
+    nextActionDate: _nextActionDate,
+    ...rest
+  } = c;
   void _id;
   void _cardImage;
+  void _cardPath;
+  void _status;
+  void _nextAction;
+  void _nextActionDate;
   // 예전 자료(consultDate 없음)는 저장시각의 날짜로 채워 줍니다.
   return { ...rest, consultDate: c.consultDate || _createdAt.slice(0, 10) };
 }

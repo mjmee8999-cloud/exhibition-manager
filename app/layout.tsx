@@ -17,12 +17,24 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "스피드랙 해외 전시회 통합 관리 시스템",
   description: "전시회 준비부터 사후 관리까지 한 곳에서",
+  // 홈 화면 아이콘 (public/icon-*.png, apple-icon.png)
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/apple-icon.png",
+  },
+  // iOS에서 "홈 화면에 추가" 시 전체화면 앱처럼 열리게
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "전시회 관리",
+  },
 };
 
-// 휴대폰에서 화면 폭에 맞게 표시되도록 (모바일 대응)
+// 휴대폰에서 화면 폭에 맞게 표시되도록 (모바일 대응) + 상단바 색상
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#2563eb",
 };
 
 export default function RootLayout({

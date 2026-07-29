@@ -26,6 +26,7 @@ import {
   listDesigns,
   saveDesign as dbSaveDesign,
   deleteDesign as dbDeleteDesign,
+  saveShipment as dbSaveShipment,
 } from './boothStore';
 
 /* ============================================================
@@ -3184,23 +3185,23 @@ export default function BoothSimulator() {
   };
 
   // 이 배치를 "전시품목(Shipment)"으로 저장하고, 상위 앱의 전시품목 페이지로 이동.
-  // 저장은 booth-sim(iframe)과 우리 Next 앱이 같은 도메인이라 localStorage 를 공유해서 가능.
-  const saveShipment = (d) => {
-    try {
-      const KEY = SHIPMENT_KEY; // 전시회별 키
-      const shipment = {
-        id: `sh_${Date.now()}`,
-        name: d.name,
-        designId: d.id,
-        savedAt: new Date().toISOString(),
-        booth: d.booth ? { ...d.booth } : null,
-        // 소품은 BOM 대상이 아니라 품목 목록에서 제외 (선반만)
-        items: (d.products || [])
-          .filter((p) => {
-            const t = PRODUCT_LIBRARY.find((x) => x.id === p.productId);
-            return (t?.group || 'shelf') === 'shelf';
-          })
-          .map((p) => ({
+  //  - 저장은 Supabase(DB)에 → 어느 컴퓨터에서 열어도 공유됩니다.
+  //  - 혹시 DB 저장이 실패해도(오프라인 등) localStorage 로 남겨 이동은 되게 합니다.
+  const saveShipment = async (d) => {
+    const KEY = SHIPMENT_KEY; // 전시회별 키
+    const shipment = {
+      id: `sh_${Date.now()}`,
+      name: d.name,
+      designId: d.id,
+      savedAt: new Date().toISOString(),
+      booth: d.booth ? { ...d.booth } : null,
+      // 소품은 BOM 대상이 아니라 품목 목록에서 제외 (선반만)
+      items: (d.products || [])
+        .filter((p) => {
+          const t = PRODUCT_LIBRARY.find((x) => x.id === p.productId);
+          return (t?.group || 'shelf') === 'shelf';
+        })
+        .map((p) => ({
           productId: p.productId,
           name: p.name,
           brand: p.brand === 'HOMEDANT HOUSE' ? 'HOMEDANT HOUSE' : 'SPEEDRACK',
@@ -3211,18 +3212,23 @@ export default function BoothSimulator() {
           frameColor: p.frameColor,
           boardColor: p.boardColor,
         })),
-      };
-      // 전시품목은 하나만 유지 (기존 것을 덮어씀)
-      window.localStorage.setItem(KEY, JSON.stringify([shipment]));
-      // 전시품목 페이지로 이동 (iframe 안이면 상위 창을 이동)
-      const target = '/before/shipment';
-      if (window.top && window.top !== window.self) {
-        window.top.location.href = target;
-      } else {
-        window.location.href = target;
-      }
+    };
+    // DB에 저장(이동 전에 저장이 끝나길 기다림). 실패해도 아래 localStorage 로 이어감.
+    try {
+      await dbSaveShipment(EX_ID, shipment);
     } catch (err) {
-      alert('전시품목 저장에 실패했어요: ' + err.message);
+      console.error('전시품목 DB 저장 실패:', err);
+    }
+    // 백업 겸 같은 도메인 즉시 접근용 (Next 페이지는 DB를 우선 읽음)
+    try {
+      window.localStorage.setItem(KEY, JSON.stringify([shipment]));
+    } catch { /* ignore */ }
+    // 전시품목 페이지로 이동 (iframe 안이면 상위 창을 이동)
+    const target = '/before/shipment';
+    if (window.top && window.top !== window.self) {
+      window.top.location.href = target;
+    } else {
+      window.location.href = target;
     }
   };
 

@@ -2,7 +2,8 @@
 
 // 전시 품목 리스트 페이지
 //  - 부스 시뮬레이터의 「전시 품목 리스트 반영」으로 넘어온 배치를 여기서 봅니다.
-//  - 저장은 localStorage 키 `booth_shipments` 에 하나만 유지돼요(시뮬레이터와 같은 도메인이라 공유).
+//  - 저장은 Supabase(DB) `booth_shipments` 표에 전시회당 1건 유지 → 어느 컴퓨터에서 열어도 공유돼요.
+//    (예전 브라우저 localStorage 저장분은 처음 열 때 자동으로 DB로 옮겨집니다.)
 //  - 3개 섹션이 유기적으로 연결돼요:
 //      ① 전체 품목(선반/파츠 + 수량)
 //      ② 품목별 BOM(품목 1개당 부품 — 품목마다)
@@ -12,6 +13,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
+import { loadShipment, saveShipment, deleteShipment } from "@/lib/shipmentStore";
 
 // ---- 타입 ----
 type RawItem = {
@@ -143,7 +145,6 @@ function aggregate(items: LineItem[]): AggRow[] {
 
 export default function ShipmentPage() {
   const { selected } = useExhibitions();
-  const storageKey = selected ? `${KEY_BASE}:${selected.id}` : null;
 
   const [shipment, setShipment] = useState<Shipment | null>(null);
   const [items, setItems] = useState<LineItem[]>([]);
@@ -162,36 +163,50 @@ export default function ShipmentPage() {
   const [autoTick, setAutoTick] = useState(0);
 
   useEffect(() => {
-    if (!storageKey) {
+    const exId = selected?.id;
+    if (!exId) {
       setShipment(null);
       setItems([]);
       setLoaded(true);
       return;
     }
-    setLoaded(false);
-    try {
-      let raw = window.localStorage.getItem(storageKey);
-      // 예전(전시회 구분 없던) 저장분이 있으면 이 전시회로 한 번만 옮겨옴
-      if (!raw) {
-        const legacy = window.localStorage.getItem(LEGACY_KEY);
-        if (legacy) {
-          window.localStorage.setItem(storageKey, legacy);
-          window.localStorage.removeItem(LEGACY_KEY);
-          raw = legacy;
+    let alive = true;
+    (async () => {
+      setLoaded(false);
+      let sh = await loadShipment<Shipment>(exId);
+      // 예전 브라우저(localStorage) 저장분이 있으면 이번에 한 번 DB로 옮깁니다.
+      if (!sh) {
+        try {
+          const legacyRaw =
+            window.localStorage.getItem(`${KEY_BASE}:${exId}`) ||
+            window.localStorage.getItem(LEGACY_KEY);
+          if (legacyRaw) {
+            const list = JSON.parse(legacyRaw);
+            const legacy = Array.isArray(list) && list.length ? (list[0] as Shipment) : null;
+            if (legacy) {
+              sh = legacy;
+              // DB 저장이 확실히 성공했을 때만 localStorage 를 지웁니다(실패 시 데이터 보존).
+              const ok = await saveShipment(exId, legacy);
+              if (ok) {
+                window.localStorage.removeItem(`${KEY_BASE}:${exId}`);
+                window.localStorage.removeItem(LEGACY_KEY);
+              }
+            }
+          }
+        } catch {
+          /* ignore */
         }
       }
-      const list: Shipment[] = raw ? JSON.parse(raw) : [];
-      const sh = Array.isArray(list) && list.length ? list[0] : null;
+      if (!alive) return;
       if (sh) {
         setShipment(sh);
         const built = sh.lineItems ? normalizeItems(sh.lineItems) : buildLineItems(sh.items);
         setItems(built);
         // 아직 ERP와 한 번도 맞춰보지 않은 선반이 있으면(=새로 반영된 리스트) 자동 불러오기를 예약.
-        // 실제 호출은 아래 전용 effect 에서 하되, 대상 리스트(built)를 ref 에 담아 정확히 전달한다.
         const shelves = built.filter((r) => r.kind !== "part");
         const neverTried = shelves.length > 0 && shelves.every((r) => r.erpMatched === undefined);
-        if (neverTried && autoKeyRef.current !== storageKey) {
-          autoKeyRef.current = storageKey;
+        if (neverTried && autoKeyRef.current !== exId) {
+          autoKeyRef.current = exId;
           autoListRef.current = built;
           setAutoTick((t) => t + 1);
         }
@@ -199,21 +214,18 @@ export default function ShipmentPage() {
         setShipment(null);
         setItems([]);
       }
-    } catch {
-      /* ignore */
-    }
-    setLoaded(true);
-  }, [storageKey]);
+      setLoaded(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [selected?.id]);
 
   const persist = (nextItems: LineItem[]) => {
-    if (!shipment || !storageKey) return;
+    if (!shipment || !selected) return;
     const next: Shipment = { ...shipment, lineItems: nextItems };
     setShipment(next);
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify([next]));
-    } catch {
-      /* ignore */
-    }
+    saveShipment(selected.id, next); // DB에 저장(낙관적 업데이트)
   };
   const updateItems = (next: LineItem[]) => {
     setItems(next);
@@ -351,9 +363,16 @@ export default function ShipmentPage() {
     );
 
   const clearShipment = () => {
-    if (!storageKey) return;
+    if (!selected) return;
     if (!confirm("전시 품목 리스트를 비울까요? 되돌릴 수 없어요.")) return;
-    window.localStorage.setItem(storageKey, JSON.stringify([]));
+    deleteShipment(selected.id); // DB에서 삭제
+    // 예전 localStorage 잔여분도 지워, 다시 불러올 때 되살아나지 않게 함
+    try {
+      window.localStorage.removeItem(`${KEY_BASE}:${selected.id}`);
+      window.localStorage.removeItem(LEGACY_KEY);
+    } catch {
+      /* ignore */
+    }
     setShipment(null);
     setItems([]);
   };

@@ -16,11 +16,13 @@ type Utils = {
 export function styleTableSheet(
   utils: Utils,
   ws: Worksheet,
-  opts?: { headerColor?: string },
+  opts?: { headerColor?: string; align?: "center" | "left"; wrap?: boolean },
 ): void {
   const ref = ws["!ref"];
   if (!ref) return;
   const headerColor = opts?.headerColor ?? "2D6CDF"; // 파란색
+  const align = opts?.align ?? "center"; // 데이터 셀 가로 정렬 (긴 글은 "left" 권장)
+  const wrapText = opts?.wrap ?? false; // 긴 글 자동 줄바꿈
   const range = utils.decode_range(ref);
   const thin = { style: "thin", color: { rgb: "D0D5DD" } };
   const border = { top: thin, bottom: thin, left: thin, right: thin };
@@ -40,7 +42,7 @@ export function styleTableSheet(
       } else {
         cell.s = {
           border,
-          alignment: { horizontal: "center", vertical: "center" },
+          alignment: { horizontal: align, vertical: "center", wrapText },
           ...(R % 2 === 1 ? {} : { fill: { fgColor: { rgb: "F5F7FA" } } }),
         };
       }

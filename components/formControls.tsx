@@ -7,7 +7,7 @@
 //  - GradeSelect: 중요도/관심도 A·B·C 선택
 //  - GradeBadge: 표에서 A/B/C를 색배지로 표시
 
-import type { Grade } from "@/lib/consultation";
+import type { Grade, LeadStatus } from "@/lib/consultation";
 
 // 입력칸 하나 (라벨 + input)
 export function Field({
@@ -146,6 +146,38 @@ function gradeButtonClass(grade: "A" | "B" | "C", on: boolean): string {
   if (grade === "A") return base + "border-red-600 bg-red-600 text-white";
   if (grade === "B") return base + "border-amber-500 bg-amber-500 text-white";
   return base + "border-blue-600 bg-blue-600 text-white";
+}
+
+// 후속(리드) 단계별 색 (배지·보드 공통)
+export function leadStatusColor(status: LeadStatus): string {
+  switch (status) {
+    case "팔로우업 메일 송부":
+      return "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300";
+    case "회신 옴":
+      return "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300";
+    case "견적/샘플 발송":
+      return "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300";
+    case "지속 대응":
+      return "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300";
+    case "보류/종료":
+      return "bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400";
+    default: // 신규
+      return "bg-zinc-100 text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300";
+  }
+}
+
+// 표에서 후속 단계를 색배지로 표시
+export function LeadBadge({ status }: { status: LeadStatus }) {
+  return (
+    <span
+      className={
+        "inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold " +
+        leadStatusColor(status)
+      }
+    >
+      {status}
+    </span>
+  );
 }
 
 // 표에서 중요도/관심도를 색배지로 (A=빨강, B=주황, C=파랑)

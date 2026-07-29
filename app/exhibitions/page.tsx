@@ -1,11 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   useExhibitions,
   type Exhibition,
 } from "@/components/ExhibitionProvider";
-import { exportBackup, importBackup } from "@/lib/backup";
 import DdayBadge from "@/components/DdayBadge";
 import ExhibitionEditModal from "@/components/ExhibitionEditModal";
 
@@ -19,22 +18,6 @@ export default function ExhibitionsPage() {
 
   // 수정하려고 누른 전시회. 값이 있으면 수정 창(모달)이 뜹니다.
   const [editing, setEditing] = useState<Exhibition | null>(null);
-
-  // 백업 파일 불러오기 관련
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [restoreMsg, setRestoreMsg] = useState("");
-
-  async function handleRestore(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      await importBackup(file);
-      location.reload(); // 복원한 자료를 화면에 반영
-    } catch {
-      setRestoreMsg("파일을 읽을 수 없어요. 우리 앱에서 내려받은 백업 파일이 맞는지 확인해 주세요.");
-    }
-    if (fileRef.current) fileRef.current.value = "";
-  }
 
   // 등록 폼을 제출했을 때 실행됩니다.
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -141,44 +124,6 @@ export default function ExhibitionsPage() {
           ))}
         </ul>
       )}
-
-      {/* 자료 백업 · 불러오기 */}
-      <section className="mt-10 rounded-2xl border border-dashed border-blue-400/60 bg-blue-50/50 p-5 dark:border-blue-500/40 dark:bg-blue-950/20">
-        <h2 className="text-base font-semibold">💾 자료 백업 · 불러오기</h2>
-        <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400">
-          자료는 <b>지금 쓰는 이 브라우저에만</b> 저장돼요. 다른 컴퓨터(파트장님 PC 등)에서 보여드리려면,
-          <b> 백업</b>으로 파일을 내려받아 옮긴 뒤 그 컴퓨터에서 <b>불러오기</b> 하면 그대로 나타나요.
-          이 파일은 안전한 <b>보관용 백업</b>도 됩니다.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={exportBackup}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-          >
-            ⬇ 내 자료 백업 (파일로 저장)
-          </button>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="rounded-lg border border-blue-500 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 dark:text-blue-300 dark:hover:bg-blue-950/40"
-          >
-            ⬆ 백업 파일 불러오기
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json,.json"
-            onChange={handleRestore}
-            className="hidden"
-          />
-        </div>
-        {restoreMsg && (
-          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">
-            {restoreMsg}
-          </p>
-        )}
-      </section>
 
       {/* 전시회 정보 수정 창 (editing에 값이 있을 때만 보입니다) */}
       {editing && (

@@ -12,6 +12,14 @@ import { GradeBadge } from "@/components/formControls";
 import { consultationDate, joinList, type Consultation } from "@/lib/consultation";
 import { listConsultations } from "@/lib/consultationStore";
 
+// AI 종합 보고서 데이터 형태
+type ReportData = {
+  headline: string;
+  topLeads: { company: string; reason: string }[];
+  marketTrends: string[];
+  nextActions: string[];
+};
+
 export default function DashboardPage() {
   const { selected } = useExhibitions();
 
@@ -19,6 +27,13 @@ export default function DashboardPage() {
 
   // 전체 순위 보기 창 (제목 + 전체 항목 목록)
   const [detail, setDetail] = useState<{ title: string; items: RankItem[] } | null>(null);
+
+  // AI 종합 보고서 관련
+  const [showReport, setShowReport] = useState(false);
+  const [report, setReport] = useState<ReportData | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportMsg, setReportMsg] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
 
   useEffect(() => {
     const exId = selected?.id;
@@ -56,6 +71,155 @@ export default function DashboardPage() {
       .slice(0, 3);
   }, [records, selected]);
 
+  // AI 보고서 창 열기 (아직 안 만들었으면 생성 시작)
+  function openReport() {
+    setShowReport(true);
+    if (!report && !reportBusy) generateReport();
+  }
+
+  // AI 종합 보고서 생성 (서버 → Gemini)
+  async function generateReport() {
+    if (!selected || records.length === 0) return;
+    setReportBusy(true);
+    setReportMsg("AI가 이번 전시회 데이터를 분석하는 중이에요...");
+    try {
+      const payload = {
+        exhibition: {
+          name: selected.name,
+          country: selected.country ?? "",
+          city: selected.city ?? "",
+          startDate: selected.startDate ?? "",
+          endDate: selected.endDate ?? "",
+        },
+        stats: {
+          총상담건수: stats.total,
+          중요도분포: stats.importanceCount,
+          관심도분포: stats.interestCount,
+          관심품목TOP: stats.interests.slice(0, 10),
+          문의내용TOP: stats.inquiries.slice(0, 10),
+          업체유형분포: stats.companyTypes,
+        },
+        consultations: records.slice(0, 60).map((r) => ({
+          회사: r.company,
+          업체유형: r.companyType,
+          중요도: r.importance,
+          관심도: r.interestLevel,
+          관심품목: joinList(r.interests, r.interestEtc),
+          문의: joinList(r.inquiries, r.inquiryEtc),
+          메모: r.memo,
+        })),
+      };
+      const res = await fetch("/api/exhibition-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setReportMsg(json.message || "리포트 생성에 실패했어요.");
+        return;
+      }
+      setReport(json.data as ReportData);
+      setReportMsg("");
+    } catch {
+      setReportMsg("AI 서버에 연결하지 못했어요.");
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
+  // AI 보고서 + 대시보드 데이터를 엑셀(.xlsx) 여러 시트로 저장
+  async function downloadExcel() {
+    if (!selected || !report) return;
+    setExportBusy(true);
+    try {
+      const XLSX = await import("xlsx-js-style");
+      const { styleTableSheet } = await import("@/lib/excelStyle");
+      const wb = XLSX.utils.book_new();
+
+      // 시트 하나 만들어 스타일 입혀 붙이는 도우미
+      const addSheet = (
+        rows: Record<string, string | number>[],
+        name: string,
+        cols: number[],
+        opts?: { align?: "center" | "left"; wrap?: boolean },
+      ) => {
+        const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "": "(없음)" }]);
+        ws["!cols"] = cols.map((wch) => ({ wch }));
+        styleTableSheet(XLSX.utils, ws, opts);
+        XLSX.utils.book_append_sheet(wb, ws, name);
+      };
+
+      const total = stats.total || 0;
+      const pct = (n: number) => (total ? Math.round((n / total) * 100) + "%" : "0%");
+
+      // 1) AI 보고서 (구분 / 내용)
+      const ai: Record<string, string | number>[] = [];
+      ai.push({ 구분: "전시회", 내용: `${selected.name}${selected.city ? " · " + selected.city : ""}` });
+      ai.push({ 구분: "총 상담", 내용: `${total}건` });
+      ai.push({ 구분: "요약", 내용: report.headline || "-" });
+      report.topLeads.forEach((l, i) =>
+        ai.push({ 구분: `핵심 리드 ${i + 1}`, 내용: `${l.company}${l.reason ? " — " + l.reason : ""}` }),
+      );
+      report.marketTrends.forEach((t) => ai.push({ 구분: "시장 트렌드", 내용: t }));
+      report.nextActions.forEach((t) => ai.push({ 구분: "다음 제안", 내용: t }));
+      addSheet(ai, "AI 보고서", [14, 95], { align: "left", wrap: true });
+
+      // 2) 실적 요약 (분포)
+      const dist: Record<string, string | number>[] = [];
+      const imp = stats.importanceCount;
+      const impUnset = total - (imp.A + imp.B + imp.C);
+      ([["A", imp.A], ["B", imp.B], ["C", imp.C], ["미지정", impUnset]] as [string, number][]).forEach(
+        ([k, v]) => dist.push({ 구분: "중요도", 항목: k, 건수: v, 비율: pct(v) }),
+      );
+      const int = stats.interestCount;
+      const intUnset = total - (int.A + int.B + int.C);
+      ([["A", int.A], ["B", int.B], ["C", int.C], ["미지정", intUnset]] as [string, number][]).forEach(
+        ([k, v]) => dist.push({ 구분: "관심도", 항목: k, 건수: v, 비율: pct(v) }),
+      );
+      stats.companyTypes.forEach((t) =>
+        dist.push({ 구분: "업체유형", 항목: t.label, 건수: t.count, 비율: pct(t.count) }),
+      );
+      addSheet(dist, "실적 요약", [12, 18, 8, 8]);
+
+      // 3) 관심품목 순위
+      addSheet(
+        stats.interests.map((it, i) => ({ 순위: i + 1, 관심품목: it.label, 건수: it.count })),
+        "관심품목 순위",
+        [6, 26, 8],
+      );
+
+      // 4) 문의내용 순위
+      addSheet(
+        stats.inquiries.map((it, i) => ({ 순위: i + 1, 문의내용: it.label, 건수: it.count })),
+        "문의내용 순위",
+        [6, 26, 8],
+      );
+
+      // 5) 핵심 고객 (중요도 A)
+      addSheet(
+        stats.keyClients.map((r) => ({
+          회사명: r.company,
+          담당자: r.name,
+          "부서/직책": r.title,
+          관심품목: joinList(r.interests, r.interestEtc),
+          문의내용: joinList(r.inquiries, r.inquiryEtc),
+          관심도: r.interestLevel,
+        })),
+        "핵심 고객",
+        [22, 12, 16, 28, 28, 8],
+        { align: "left", wrap: true },
+      );
+
+      const today = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `${selected.name}_실적보고서_${today}.xlsx`);
+    } catch (e) {
+      alert("엑셀을 만드는 중 문제가 생겼어요: " + (e instanceof Error ? e.message : ""));
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   // ── 전시회 미선택 안내 ──
   if (!selected) {
     return (
@@ -78,8 +242,19 @@ export default function DashboardPage() {
 
   return (
     <main className="w-full px-8 py-8">
-      <h1 className="text-3xl font-bold tracking-tight">실적 대시보드</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">실적 대시보드</h1>
+        <button
+          type="button"
+          onClick={openReport}
+          disabled={records.length === 0}
+          className="shrink-0 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          🧠 AI 보고서 추출 (엑셀)
+        </button>
+      </div>
 
+      <div className="pt-1">
       {/* 전시회 배너 */}
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-blue-50 px-5 py-3.5 text-base dark:bg-blue-950/40">
         <span className="font-semibold">{selected.name}</span>
@@ -87,12 +262,6 @@ export default function DashboardPage() {
           {selected.country}
           {selected.city ? ` · ${selected.city}` : ""}
         </span>
-        <Link
-          href="/after/organize"
-          className="ml-auto rounded-lg border border-blue-300 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/50"
-        >
-          상담일지 정리 보기 →
-        </Link>
       </div>
 
       {records.length === 0 ? (
@@ -198,6 +367,7 @@ export default function DashboardPage() {
           </Panel>
         </>
       )}
+      </div>
 
       {/* ── 전체 순위 보기 창 (모달) ── */}
       {detail && (
@@ -239,7 +409,149 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ── AI 종합 보고서 창 (모달) ── */}
+      {showReport && (
+        <div
+          onClick={() => setShowReport(false)}
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:p-8"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="my-4 w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-zinc-950 sm:p-8"
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">🧠 AI 종합 보고서</h2>
+              <button
+                type="button"
+                onClick={() => setShowReport(false)}
+                className="rounded-full px-3 py-1 text-2xl text-zinc-400 hover:bg-black/[0.05] dark:hover:bg-white/[0.08]"
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
+
+            {reportBusy ? (
+              <div className="py-16 text-center">
+                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-violet-200 border-t-violet-600" />
+                <p className="mt-4 text-zinc-500">{reportMsg || "분석 중..."}</p>
+              </div>
+            ) : report ? (
+              <>
+                {/* 보고서 미리보기 — 테마와 무관하게 항상 밝게 */}
+                <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-8 text-zinc-900">
+                  <h3 className="text-xl font-bold">{selected.name} — 실적 종합 보고서</h3>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    {selected.country}
+                    {selected.city ? ` · ${selected.city}` : ""}
+                    {selected.startDate ? ` · ${selected.startDate}` : ""}
+                    {selected.endDate ? ` ~ ${selected.endDate}` : ""}
+                    {`  ·  총 상담 ${stats.total}건`}
+                  </p>
+
+                  {report.headline && (
+                    <p className="mt-5 rounded-xl bg-violet-50 px-4 py-3 text-[15px] font-medium text-violet-900">
+                      {report.headline}
+                    </p>
+                  )}
+
+                  <ReportSection title="🎯 지금 바로 연락해야 할 핵심 리드">
+                    {report.topLeads.length === 0 ? (
+                      <p className="text-sm text-zinc-400">데이터가 부족해요.</p>
+                    ) : (
+                      <ol className="space-y-2.5">
+                        {report.topLeads.map((l, i) => (
+                          <li key={i} className="flex gap-2.5">
+                            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">
+                              {i + 1}
+                            </span>
+                            <span className="text-sm">
+                              <b className="font-semibold">{l.company || "(회사명 미상)"}</b>
+                              {l.reason ? ` — ${l.reason}` : ""}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </ReportSection>
+
+                  <ReportSection title="📈 시장이 원하는 것 (문의·관심 트렌드)">
+                    <ReportBullets items={report.marketTrends} />
+                  </ReportSection>
+
+                  <ReportSection title="✅ 다음 실행 제안">
+                    <ReportBullets items={report.nextActions} />
+                  </ReportSection>
+
+                  <p className="mt-6 border-t border-zinc-200 pt-3 text-xs text-zinc-400">
+                    ※ 이 보고서는 AI(Gemini)가 상담 데이터를 바탕으로 작성한 <b>참고용 요약</b>입니다. 수치·사실은 실제 데이터로 확인하세요.
+                  </p>
+                </div>
+
+                {/* 버튼 */}
+                <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={generateReport}
+                    disabled={exportBusy}
+                    className="rounded-xl border border-black/15 px-4 py-2.5 text-sm hover:bg-black/[0.05] disabled:opacity-40 dark:border-white/15 dark:hover:bg-white/[0.06]"
+                  >
+                    🔄 다시 생성
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadExcel}
+                    disabled={exportBusy}
+                    className="rounded-xl bg-green-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {exportBusy ? "엑셀 만드는 중..." : "⬇ 엑셀로 저장 (보고서 + 실적 데이터)"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="py-12 text-center">
+                <p className="text-red-600 dark:text-red-400">{reportMsg || "보고서를 만들지 못했어요."}</p>
+                <button
+                  type="button"
+                  onClick={generateReport}
+                  className="mt-5 rounded-xl bg-violet-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
+                >
+                  다시 시도
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </main>
+  );
+}
+
+// AI 보고서 안의 한 구획 (소제목 + 내용)
+function ReportSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-5">
+      <h4 className="text-sm font-bold text-zinc-700">{title}</h4>
+      <div className="mt-2">{children}</div>
+    </section>
+  );
+}
+
+// 점(불릿) 목록
+function ReportBullets({ items }: { items: string[] }) {
+  if (!items || items.length === 0) {
+    return <p className="text-sm text-zinc-400">데이터가 부족해요.</p>;
+  }
+  return (
+    <ul className="space-y-1.5">
+      {items.map((t, i) => (
+        <li key={i} className="flex gap-2 text-sm">
+          <span className="text-violet-500">•</span>
+          <span>{t}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
