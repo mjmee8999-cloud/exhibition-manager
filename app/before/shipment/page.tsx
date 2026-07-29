@@ -486,23 +486,43 @@ export default function ShipmentPage() {
     addSheet(s1, "전체 품목", [5, 9, 16, 12, 16, 5, 10, 6]);
 
     // ② 품목별 BOM — 같은 품목은 품목/규격/품목수량 칸을 세로로 병합해 한 칸으로
+    //   여유분 ON 이면 완제품(선반)마다 부품+2·합판+1 을 합계에 더하고 "여유분" 열도 표시.
     const s2: Record<string, string | number>[] = [];
     const merges2: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
     items.forEach((r) => {
       const parts = r.bom || [];
       if (!parts.length) return;
+      const isShelf = r.kind !== "part";
+      // 여유분 계산(완제품만, 같은 부품은 한 번만)
+      const spareByRow = new Map<string, number>();
+      if (spare && isShelf) {
+        const seen = new Set<string>();
+        for (const p of parts) {
+          const key = p.itemNo ? `no:${p.itemNo}|${p.spec ?? ""}` : `nm:${p.part}`;
+          if (seen.has(key)) {
+            spareByRow.set(p.id, 0);
+            continue;
+          }
+          seen.add(key);
+          spareByRow.set(p.id, isBoardPart(p.part) ? 1 : 2);
+        }
+      }
       const startRow = s2.length + 1; // +1: 첫 줄은 제목행
       parts.forEach((p) => {
-        s2.push({
+        const sp = spareByRow.get(p.id) || 0;
+        const base = (Number(p.qty) || 0) * (Number(r.qty) || 0);
+        const row: Record<string, string | number> = {
           품목: r.kind === "part" ? "추가 파츠" : r.name,
-          규격: `${r.width}×${r.depth}×${r.height}`,
+          규격: r.kind === "part" ? "-" : `${r.width}×${r.depth}×${r.height}`,
           부품: p.part,
           부품규격: p.spec || "",
           "품번(ERP)": p.itemNo || "",
           "1개당 수량": p.qty,
           품목수량: r.qty,
-          합계: (Number(p.qty) || 0) * (Number(r.qty) || 0),
-        });
+        };
+        if (spare) row["여유분"] = sp || "";
+        row["합계"] = base + sp;
+        s2.push(row);
       });
       const endRow = s2.length;
       if (parts.length > 1) {
@@ -512,7 +532,12 @@ export default function ShipmentPage() {
         );
       }
     });
-    addSheet(s2, "품목별 BOM", [16, 14, 34, 16, 16, 10, 9, 8], merges2);
+    addSheet(
+      s2,
+      "품목별 BOM",
+      spare ? [16, 14, 34, 16, 16, 10, 9, 8, 8] : [16, 14, 34, 16, 16, 10, 9, 8],
+      merges2,
+    );
 
     // ③ 자재별 BOM — ERP 기타출고요청 양식에 그대로 붙여넣도록 열 구성.
     //   단위 / 기타출고구분 / 기준단위 / 활동센터는 항상 고정값.
