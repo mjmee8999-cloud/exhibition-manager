@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
 import ConsultationFormFields from "@/components/ConsultationFormFields";
+import BulkImportCard from "@/components/BulkImportCard";
 import {
   EMPTY_FORM,
   resizeImage,
@@ -335,6 +336,14 @@ export default function ConsultationPage() {
           상담일지 저장
         </button>
       </div>
+
+      {/* 구분선 + 엑셀 대량 추가 (QR 리드 명단 등 여러 명을 한꺼번에) */}
+      <div className="my-8 flex items-center gap-3">
+        <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+        <span className="text-sm font-medium text-zinc-400">또는 여러 명 한꺼번에</span>
+        <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+      </div>
+      <BulkImportCard exhibitionId={selected.id} />
     </main>
   );
 }

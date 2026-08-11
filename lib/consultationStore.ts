@@ -102,6 +102,34 @@ export async function saveConsultation(
   return { ...c, cardPath, cardImage: cardPath ? toPublicUrl(cardPath) : "" };
 }
 
+// 상담일지 여러 건을 한 번에 저장합니다. (엑셀 대량 추가용)
+//  - 이 경우 명함 사진이 없으므로(QR 리드 명단) Storage 업로드 과정 없이 바로 DB에 넣습니다.
+//  - 너무 많으면 한 번에 못 보낼 수 있어 500건씩 끊어서 저장합니다.
+//  - 반환값: 실제로 저장된 건수.
+export async function saveConsultationsBulk(
+  exhibitionId: string,
+  list: Consultation[],
+): Promise<number> {
+  const rows = list.map((c) => ({
+    id: c.id,
+    exhibition_id: exhibitionId,
+    data: { ...c, cardImage: "", cardPath: "" } as Consultation,
+  }));
+
+  let saved = 0;
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const slice = rows.slice(i, i + CHUNK);
+    const { error } = await supabase.from(TABLE).upsert(slice, { onConflict: "id" });
+    if (error) {
+      console.error("상담일지 대량 저장 실패:", error.message);
+      break; // 실패하면 지금까지 저장된 만큼만 알리고 멈춥니다.
+    }
+    saved += slice.length;
+  }
+  return saved;
+}
+
 // 상담일지 한 건을 삭제합니다 — DB 정보 + 창고의 명함 파일 둘 다.
 export async function deleteConsultation(id: string, cardPath?: string): Promise<void> {
   if (cardPath) {
