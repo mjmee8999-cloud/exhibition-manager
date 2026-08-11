@@ -55,8 +55,8 @@ export default function Sidebar({
           {phases.map((phase) => (
             <div key={phase.key}>
               {/* 단계 제목 (전시회 전/중/후) — 크고 진하게 강조 */}
-              <div className="mb-2 flex items-center gap-2 px-1 text-lg font-extrabold text-zinc-900 dark:text-white">
-                <span className="text-xl">{phase.emoji}</span>
+              <div className="mb-2 flex items-center gap-2 px-1 text-2xl font-extrabold text-zinc-900 dark:text-white">
+                <span className="text-2xl">{phase.emoji}</span>
                 <span>{phase.label}</span>
               </div>
               <ul className="space-y-1">
@@ -67,7 +67,7 @@ export default function Sidebar({
                       <Link
                         href={feature.href}
                         className={
-                          "block rounded-lg px-3 py-2 transition-colors " +
+                          "block rounded-lg px-3 py-2.5 transition-colors " +
                           (isActive
                             ? "bg-blue-600"
                             : "hover:bg-black/[0.05] dark:hover:bg-white/[0.06]")
@@ -76,24 +76,13 @@ export default function Sidebar({
                         {/* 기능 이름 */}
                         <div
                           className={
-                            "text-sm font-medium " +
+                            "text-base font-medium " +
                             (isActive
                               ? "text-white"
                               : "text-zinc-800 dark:text-zinc-100")
                           }
                         >
                           {feature.title}
-                        </div>
-                        {/* 기능 한 줄 설명 */}
-                        <div
-                          className={
-                            "mt-0.5 text-xs " +
-                            (isActive
-                              ? "text-blue-100"
-                              : "text-zinc-400 dark:text-zinc-500")
-                          }
-                        >
-                          {feature.desc}
                         </div>
                       </Link>
                     </li>
@@ -114,14 +103,12 @@ export default function Sidebar({
             active={pathname === "/before/checklist"}
             emoji="✅"
             title="체크리스트"
-            desc="전 · 중 · 후 준비 할 일 전체"
           />
           <SecondaryLink
             href="/expense"
             active={pathname === "/expense"}
             emoji="🧾"
             title="출장비 정산"
-            desc="판촉물 · 쉽먼트 · 항공 · 숙박 · 현지 비용"
           />
         </div>
       </nav>
@@ -135,19 +122,17 @@ function SecondaryLink({
   active,
   emoji,
   title,
-  desc,
 }: {
   href: string;
   active: boolean;
   emoji: string;
   title: string;
-  desc: string;
 }) {
   return (
     <Link
       href={href}
       className={
-        "block rounded-lg border px-3 py-2 transition-colors " +
+        "block rounded-lg border px-3 py-2.5 transition-colors " +
         (active
           ? "border-transparent bg-blue-600"
           : "border-black/10 hover:bg-black/[0.05] dark:border-white/10 dark:hover:bg-white/[0.06]")
@@ -155,20 +140,12 @@ function SecondaryLink({
     >
       <div
         className={
-          "flex items-center gap-1.5 text-sm font-semibold " +
+          "flex items-center gap-1.5 text-base font-semibold " +
           (active ? "text-white" : "text-zinc-800 dark:text-zinc-100")
         }
       >
         <span>{emoji}</span>
         <span>{title}</span>
-      </div>
-      <div
-        className={
-          "mt-0.5 text-xs " +
-          (active ? "text-blue-100" : "text-zinc-400 dark:text-zinc-500")
-        }
-      >
-        {desc}
       </div>
     </Link>
   );
