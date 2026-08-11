@@ -15,6 +15,7 @@ export type ColumnMapping = {
   phone: string;
   homepage: string;
   revenue: string;
+  consultDate: string; // 상담 일자 열 (있으면 그 날짜로, 없으면 저장 화면에서 오늘로 채움)
   memoColumns: string[];
 };
 
@@ -26,8 +27,46 @@ export const EMPTY_MAPPING: ColumnMapping = {
   phone: "",
   homepage: "",
   revenue: "",
+  consultDate: "",
   memoColumns: [],
 };
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+// 엑셀에 적힌 여러 형태의 날짜를 상담일지 형식(YYYY-MM-DD)으로 바꿉니다.
+//  - "2026-08-03", "2026.8.3", "2026/08/03"      → 그대로 (연-월-일)
+//  - "08/03/2026", "8/3/2026 3:19pm"             → 미국식(월/일/연)으로 해석
+//  - 엑셀 날짜 일련번호(예: 46235)               → 실제 날짜로 변환
+//  - 그 외에는 최대한 해석, 안 되면 빈 문자열     → (저장 시 오늘 날짜로 채움)
+export function toYmd(raw: string): string {
+  const s = (raw ?? "").trim();
+  if (!s) return "";
+
+  // 연-월-일 (연도가 먼저)
+  let m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/.exec(s);
+  if (m) return `${m[1]}-${pad(Number(m[2]))}-${pad(Number(m[3]))}`;
+
+  // 월/일/연 (미국식, 연도가 뒤)
+  m = /^(\d{1,2})[-./](\d{1,2})[-./](\d{4})/.exec(s);
+  if (m) return `${m[3]}-${pad(Number(m[1]))}-${pad(Number(m[2]))}`;
+
+  // 엑셀 날짜 일련번호 (1899-12-30 기준 경과일수)
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    const serial = parseFloat(s);
+    if (serial > 20000 && serial < 90000) {
+      const d = new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000);
+      if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    }
+    return "";
+  }
+
+  // 마지막 시도: 브라우저 날짜 해석에 맡김
+  const d = new Date(s);
+  if (!Number.isNaN(d.getTime())) {
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  return "";
+}
 
 // 웹사이트 칸 값에서 실제 주소만 뽑습니다. (예: "Company Website: https://a.com" → "https://a.com")
 function cleanHomepage(raw: string): string {
@@ -77,6 +116,8 @@ export function rowsToForms(
 
     forms.push({
       ...EMPTY_FORM,
+      // 상담 일자 열을 지정했으면 그 날짜를, 아니면 빈 값(저장 화면에서 오늘로 채움)
+      consultDate: mapping.consultDate ? toYmd(cellValue(headers, row, mapping.consultDate)) : "",
       company,
       name,
       title: cellValue(headers, row, mapping.title),

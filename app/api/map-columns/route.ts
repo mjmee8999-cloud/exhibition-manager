@@ -63,6 +63,7 @@ export async function POST(request: Request) {
                     "- phone: 전화번호/연락처\n" +
                     "- homepage: 웹사이트/홈페이지\n" +
                     "- revenue: 연매출\n" +
+                    "- consultDate: 상담 일자/상담 날짜/미팅 날짜 (사람이 상담한 날. 리드가 만들어진 날짜(Date Created)만 있으면 그걸 써도 됨. 날짜 열이 없으면 빈 문자열)\n" +
                     "- memoColumns: 위에 안 쓴 열들 중 '영업에 참고될 유용한 정보' 열 제목들 (예: 국가, 도시, 판매채널, 관심 품목, 구매 권한/역할, 참가 목적, 등급/점수). ID·상세주소·우편번호·빈 열처럼 참고 가치가 낮은 건 넣지 마.\n" +
                     "해당하는 열이 없으면 빈 문자열(memoColumns/name은 빈 배열)로 둬. 반드시 아래 '헤더 목록'에 실제로 있는 문자열만 사용해. 지어내지 마.\n\n" +
                     "헤더 목록:\n" +
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
                 phone: { type: "string" },
                 homepage: { type: "string" },
                 revenue: { type: "string" },
+                consultDate: { type: "string" },
                 memoColumns: { type: "array", items: { type: "string" } },
               },
             },
@@ -125,6 +127,7 @@ export async function POST(request: Request) {
         phone: one(parsed.phone),
         homepage: one(parsed.homepage),
         revenue: one(parsed.revenue),
+        consultDate: one(parsed.consultDate),
         memoColumns: many(parsed.memoColumns),
       },
     });

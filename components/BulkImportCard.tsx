@@ -139,7 +139,8 @@ export default function BulkImportCard({
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
       cardImage: "",
-      consultDate: today,
+      // 엑셀에 상담 일자가 있으면 그 날짜, 없으면 오늘
+      consultDate: f.consultDate || today,
       status: "신규",
     }));
 
@@ -259,6 +260,9 @@ export default function BulkImportCard({
             <MapRow label="매출액">
               <HeaderSelect value={mapping.revenue} options={headerOptions} onChange={(v) => setField("revenue", v)} />
             </MapRow>
+            <MapRow label="상담 일자">
+              <HeaderSelect value={mapping.consultDate} options={headerOptions} onChange={(v) => setField("consultDate", v)} placeholder="(없으면 오늘 날짜)" />
+            </MapRow>
           </div>
 
           {mapping.memoColumns.length > 0 && (
@@ -272,6 +276,7 @@ export default function BulkImportCard({
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead className="bg-black/[0.03] text-xs text-zinc-500 dark:bg-white/[0.05] dark:text-zinc-400">
                 <tr>
+                  <th className="px-3 py-2 font-semibold">상담일자</th>
                   <th className="px-3 py-2 font-semibold">회사명</th>
                   <th className="px-3 py-2 font-semibold">담당자명</th>
                   <th className="px-3 py-2 font-semibold">부서/직책</th>
@@ -282,6 +287,9 @@ export default function BulkImportCard({
               <tbody>
                 {previewForms.slice(0, 5).map((f, i) => (
                   <tr key={i} className="border-t border-black/5 dark:border-white/5">
+                    <td className="whitespace-nowrap px-3 py-2 text-zinc-500">
+                      {f.consultDate || "오늘"}
+                    </td>
                     <td className="px-3 py-2">{f.company || "-"}</td>
                     <td className="px-3 py-2">{f.name || "-"}</td>
                     <td className="px-3 py-2">{f.title || "-"}</td>
