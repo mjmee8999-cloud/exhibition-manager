@@ -6,7 +6,7 @@
 //  - 입력 항목 본문은 공통 컴포넌트(ConsultationFormFields)를 씁니다.
 //    (저장된 목록은 뒤쪽 "명함 및 상담일지 정리"에서 봅니다.)
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
 import ConsultationFormFields from "@/components/ConsultationFormFields";
@@ -24,6 +24,7 @@ export default function ConsultationPage() {
 
   const [form, setForm] = useState<FormState>({ ...EMPTY_FORM, consultDate: todayStr() });
   const [cardImage, setCardImage] = useState<string>("");
+  const [dragOver, setDragOver] = useState(false); // 사진을 끌어다 놓는 중인지(테두리 강조용)
 
   const [scanStatus, setScanStatus] = useState<"idle" | "loading" | "ok" | "warn" | "error">("idle");
   const [scanMsg, setScanMsg] = useState("");
@@ -35,10 +36,14 @@ export default function ConsultationPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 명함 사진 선택 → AI 자동 인식
-  async function handleCardSelect(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  // 사진 1장을 받아 미리보기 + AI 자동 인식까지 처리합니다.
+  //  → 파일 선택 / 끌어다 놓기 / 붙여넣기(Ctrl+V) 모두 이 함수를 함께 씁니다.
+  async function processCardFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setScanStatus("error");
+      setScanMsg("이미지 파일만 올릴 수 있어요.");
+      return;
+    }
 
     let dataUrl = "";
     try {
@@ -82,6 +87,40 @@ export default function ConsultationPage() {
       setScanMsg("AI 서버에 연결하지 못했어요. 정보를 직접 입력해 주세요.");
     }
   }
+
+  // ① 파일 선택창으로 고른 경우
+  function handleCardSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) processCardFile(file);
+  }
+
+  // ② 사진을 칸 위로 끌어다 놓은 경우
+  function handleDrop(event: React.DragEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    setDragOver(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) processCardFile(file);
+  }
+
+  // ③ 사진을 붙여넣기(Ctrl+V) 한 경우 — 화면 어디서 붙여넣어도 인식
+  useEffect(() => {
+    function handlePaste(event: ClipboardEvent) {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            processCardFile(file);
+            break;
+          }
+        }
+      }
+    }
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 회사명으로 업체 정보 AI 자동 조회 (웹 검색)
   async function handleLookup() {
@@ -208,13 +247,26 @@ export default function ConsultationPage() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex flex-1 flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-black/15 py-10 text-center transition hover:border-blue-400 hover:bg-blue-50/50 dark:border-white/15 dark:hover:bg-blue-950/20"
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            className={
+              "flex flex-1 flex-col items-center gap-2 rounded-2xl border-2 border-dashed py-10 text-center transition " +
+              (dragOver
+                ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                : "border-black/15 hover:border-blue-400 hover:bg-blue-50/50 dark:border-white/15 dark:hover:bg-blue-950/20")
+            }
           >
             <span className="text-5xl">📸</span>
             <span className="text-lg font-medium text-zinc-700 dark:text-zinc-300">
               명함 사진 촬영 / 업로드
             </span>
-            <span className="text-sm text-zinc-400">여기를 누르세요</span>
+            <span className="text-sm text-zinc-400">
+              여기를 누르거나 · 사진을 끌어다 놓거나 · 붙여넣기(Ctrl+V)
+            </span>
           </button>
           {cardImage && (
             // eslint-disable-next-line @next/next/no-img-element
