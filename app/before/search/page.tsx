@@ -254,7 +254,7 @@ export default function SearchPage() {
             ℹ️ 홈던트 중요도는 어떻게 매기나요?
           </summary>
           <div className="mt-3 space-y-2 text-zinc-500 dark:text-zinc-400">
-            <p>전시회의 <b>산업 적합도 + 규모</b>를 점수로 합산해 A/B/C로 나눠요.</p>
+            <p>전시회의 <b>산업 적합도 + 규모</b>를 점수로 합산하고, 점수 구간을 <b>색</b>으로 표시해요.</p>
             <ul className="ml-4 list-disc space-y-1">
               {HOMEDANT_INDUSTRY_WEIGHTS.map((w) => (
                 <li key={w.q}>
@@ -265,8 +265,8 @@ export default function SearchPage() {
               <li>규모(참가업체·참관객·참가국 수)가 클수록 가점 — 단, 데이터가 비어있는 경우가 많아요</li>
             </ul>
             <p>
-              합계 <b className="text-red-600">A: 45+</b> · <b className="text-amber-600">B: 20+</b> ·{" "}
-              <b className="text-blue-600">C: 1+</b>
+              합계 <b className="text-red-600">45점+ 빨강</b> · <b className="text-amber-600">20점+ 주황</b> ·{" "}
+              <b className="text-blue-600">1점+ 파랑</b>
             </p>
           </div>
         </details>
@@ -386,7 +386,7 @@ function Select({
   );
 }
 
-// 중요도 배지 (A=빨강, B=주황, C=파랑)
+// 중요도 배지 (티어는 색으로만 구분: A=빨강, B=주황, C=파랑 / 글자는 점수만)
 function ScoreBadge({ grade, score }: { grade: "" | "A" | "B" | "C"; score: number }) {
   if (!grade) return null;
   const color =
@@ -397,10 +397,10 @@ function ScoreBadge({ grade, score }: { grade: "" | "A" | "B" | "C"; score: numb
         : "bg-blue-600 text-white";
   return (
     <span
-      className={"shrink-0 rounded-lg px-2.5 py-1 text-sm font-bold " + color}
+      className={"shrink-0 rounded-lg px-3 py-1 text-base font-bold " + color}
       title={`중요도 점수 ${score}점`}
     >
-      {grade} · {score}
+      {score}점
     </span>
   );
 }
