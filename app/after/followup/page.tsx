@@ -259,7 +259,8 @@ export default function FollowupPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">팔로우업 메일</h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            상담 고객에게 보낼 감사·후속 메일을 자동으로 만들어 드려요. 복사해서 그룹웨어에 붙여넣어 보내세요.
+            상담 고객에게 보낼 감사·후속 메일을 자동으로 만들어 드려요. <b>「✉ 메일 보내기」</b>를 누르면 본인 메일앱이
+            수신자·제목·본문·참조까지 채워진 채로 열려요. (복사해서 붙여넣기도 가능)
           </p>
         </div>
       </div>
@@ -453,6 +454,12 @@ export default function FollowupPage() {
             만들어진 내용은 언제든 자유롭게 수정할 수 있어요.
           </p>
 
+          <p className="mt-2 rounded-xl bg-blue-50 px-4 py-2.5 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
+            ✉ <b>메일 보내기</b>는 본인 계정으로 열리므로 <b>보내는 사람이 자동으로 본인</b>이 돼요.
+            <b>다우오피스 웹메일로 열리게</b> 하려면 브라우저 설정에서 다우오피스를 <b>기본 메일 앱(mailto)</b>으로 등록하세요.
+            (등록 안 하면 컴퓨터 기본 메일앱 — 예: 아웃룩 — 이 열려요.)
+          </p>
+
           {targets.length === 0 ? (
             <div className="mt-6 rounded-2xl border border-dashed border-black/15 p-8 text-center text-zinc-500 dark:border-white/15 dark:text-zinc-400">
               조건에 맞는 팔로업 대상이 없어요.
@@ -637,6 +644,20 @@ function FollowupCard({
     }
   }
 
+  // "메일 보내기" — 기본 메일앱(다우오피스 등)을 수신자·제목·본문·참조가 채워진 채로 엽니다.
+  //  줄바꿈은 메일앱 호환을 위해 CRLF(%0D%0A)로 인코딩합니다.
+  const mailtoHref = useMemo(() => {
+    const enc = (s: string) => encodeURIComponent(s.replace(/\r?\n/g, "\r\n"));
+    const params: string[] = [];
+    if (options.cc.trim()) params.push(`cc=${enc(options.cc.trim())}`);
+    params.push(`subject=${enc(subject)}`);
+    params.push(`body=${enc(body)}`);
+    return `mailto:${c.email.trim()}?${params.join("&")}`;
+  }, [c.email, options.cc, subject, body]);
+
+  // mailto는 URL 길이 제한이 있어(대략 2000자) 본문이 매우 길면 메일앱에서 잘릴 수 있어요.
+  const mailtoTooLong = mailtoHref.length > 1900;
+
   return (
     <section className="rounded-2xl border border-black/10 p-5 dark:border-white/10">
       {/* 헤더: 회사·담당자·중요도·이메일 */}
@@ -720,14 +741,25 @@ function FollowupCard({
       />
 
       {/* 버튼 줄 */}
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <a
+          href={mailtoHref}
+          className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+        >
+          ✉ 메일 보내기
+        </a>
         <button
           type="button"
           onClick={copyBody}
-          className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+          className="rounded-xl border border-black/15 px-5 py-2.5 text-sm font-semibold hover:bg-black/[0.05] dark:border-white/15 dark:hover:bg-white/[0.06]"
         >
           {copied === "body" ? "✓ 복사됨" : "본문 복사"}
         </button>
+        {mailtoTooLong && (
+          <span className="text-xs text-amber-600 dark:text-amber-400">
+            본문이 길어 메일앱에서 잘릴 수 있어요 → &ldquo;본문 복사&rdquo; 사용을 권장
+          </span>
+        )}
       </div>
     </section>
   );
