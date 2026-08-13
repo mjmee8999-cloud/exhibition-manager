@@ -655,9 +655,6 @@ function FollowupCard({
     return `mailto:${c.email.trim()}?${params.join("&")}`;
   }, [c.email, options.cc, subject, body]);
 
-  // mailto는 URL 길이 제한이 있어(대략 2000자) 본문이 매우 길면 메일앱에서 잘릴 수 있어요.
-  const mailtoTooLong = mailtoHref.length > 1900;
-
   return (
     <section className="rounded-2xl border border-black/10 p-5 dark:border-white/10">
       {/* 헤더: 회사·담당자·중요도·이메일 */}
@@ -755,11 +752,6 @@ function FollowupCard({
         >
           {copied === "body" ? "✓ 복사됨" : "본문 복사"}
         </button>
-        {mailtoTooLong && (
-          <span className="text-xs text-amber-600 dark:text-amber-400">
-            본문이 길어 메일앱에서 잘릴 수 있어요 → &ldquo;본문 복사&rdquo; 사용을 권장
-          </span>
-        )}
       </div>
     </section>
   );
