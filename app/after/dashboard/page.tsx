@@ -105,7 +105,7 @@ export default function DashboardPage() {
           중요도: r.importance,
           관심도: r.interestLevel,
           관심품목: joinList(r.interests, r.interestEtc),
-          문의: joinList(r.inquiries, r.inquiryEtc),
+          문의: joinList((r.inquiries ?? []).map(normInquiry), r.inquiryEtc),
           메모: r.memo,
         })),
       };
@@ -203,7 +203,7 @@ export default function DashboardPage() {
           담당자: r.name,
           "부서/직책": r.title,
           관심품목: joinList(r.interests, r.interestEtc),
-          문의내용: joinList(r.inquiries, r.inquiryEtc),
+          문의내용: joinList((r.inquiries ?? []).map(normInquiry), r.inquiryEtc),
           관심도: r.interestLevel,
         })),
         "핵심 고객",
@@ -585,6 +585,11 @@ function formatDay(iso: string): string {
   return `${pad(d.getMonth() + 1)}.${pad(d.getDate())} (${week})`;
 }
 
+// 예전 상담일지에 "생산국"으로 저장된 문의 항목을 "원산지"로 통일해 집계합니다.
+function normInquiry(label: string): string {
+  return label.trim() === "생산국" ? "원산지" : label;
+}
+
 function summarize(records: Consultation[]) {
   const total = records.length;
 
@@ -641,7 +646,7 @@ function summarize(records: Consultation[]) {
     cardRate,
     interests: tally((r) => r.interests, (r) => r.interestEtc),
     companyTypes: tallyOne((r) => r.companyType),
-    inquiries: tally((r) => r.inquiries, (r) => r.inquiryEtc),
+    inquiries: tally((r) => (r.inquiries ?? []).map(normInquiry), (r) => r.inquiryEtc),
     keyClients: records.filter((r) => r.importance === "A"),
   };
 }
