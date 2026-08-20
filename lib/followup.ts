@@ -91,6 +91,24 @@ export const DEFAULT_OPTIONS: FollowupOptions = {
   cc: "",
 };
 
+// 참조(CC) 입력을 이메일 목록으로 정리합니다.
+//  - 쉼표·세미콜론·띄어쓰기·줄바꿈 등 무엇으로 구분해 넣어도 모두 받아줍니다.
+//  - '@'가 없는(이메일이 아닌) 조각과 중복은 걸러냅니다.
+//  예) "kim@a.com; lee@b.com\npark@c.com" → ["kim@a.com", "lee@b.com", "park@c.com"]
+export function parseEmails(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of (raw || "").split(/[\s,;]+/)) {
+    const e = part.trim();
+    if (!e || !e.includes("@")) continue;
+    const key = e.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(e);
+  }
+  return out;
+}
+
 // 자동으로 들어가는 값 (직책·홈페이지)
 const DEPT: Record<Lang, string> = {
   en: "Overseas Sales Department",
@@ -279,4 +297,140 @@ export function buildTemplate(
     sign,
   );
   return { subject, body };
+}
+
+// ────────────────────────────────────────────────────────────────
+//  사용자 지정 양식 (내가 직접 만드는 양식)
+//  - 언어별로 "제목 + 본문"을 직접 편집합니다.
+//  - 자동으로 채워지는 값은 {{회사명}} 같은 "치환 표시"로 넣어두면
+//    메일을 만들 때 각 고객의 실제 값으로 바뀝니다.
+// ────────────────────────────────────────────────────────────────
+
+export type Template = { subject: string; body: string };
+export type Templates = Record<Lang, Template>;
+
+// 양식에서 쓸 수 있는 치환 표시(토큰) 목록 — 화면 안내에 씁니다.
+export const TEMPLATE_TOKENS: { token: string; label: string }[] = [
+  { token: "{{회사명}}", label: "고객 회사명" },
+  { token: "{{담당자}}", label: "고객 담당자 이름" },
+  { token: "{{보내는사람}}", label: "내 이름 (서명의 이름)" },
+  { token: "{{전시회명}}", label: "전시회 이름" },
+  { token: "{{기간}}", label: "전시회 기간" },
+  { token: "{{회사소개}}", label: "회사 한 줄 소개" },
+  { token: "{{서명}}", label: "내 서명 블록" },
+];
+
+// 기본 양식(치환 표시 형태) — 현재 고정 양식과 같은 내용입니다.
+//  사용자가 아무것도 안 바꾸면 지금과 똑같은 메일이 나와요.
+export const DEFAULT_TEMPLATES: Templates = {
+  en: {
+    subject: "Thank you for visiting HOMEDANT at {{전시회명}}",
+    body: [
+      "{{회사명}}",
+      "",
+      "Dear {{담당자}},",
+      "",
+      "Thank you very much for your continued support.",
+      "",
+      "My name is {{보내는사람}} from HOMEDANT's Overseas Sales Department.",
+      "",
+      "Thank you for taking the time to visit the HOMEDANT booth at {{전시회명}} ({{기간}}). It was a great pleasure to meet you and to introduce our assembly-type steel racks.",
+      "",
+      "If you have any questions, please feel free to reply to this email. We look forward to building a great relationship with you.",
+      "",
+      "Once again, thank you for visiting our booth. We look forward to building a lasting relationship with you.",
+      "",
+      "{{서명}}",
+    ].join("\n"),
+  },
+  ja: {
+    subject: "【HOMEDANT】{{전시회명}} ご来場の御礼",
+    body: [
+      "{{회사명}}",
+      "",
+      "{{담당자}}様",
+      "",
+      "平素より大変お世話になっております。",
+      "",
+      "株式会社HOMEDANT 海外営業部の{{보내는사람}}でございます。",
+      "",
+      "このたびはご多忙の中、{{전시회명}}（{{기간}}）にて、弊社HOMEDANT（ホームダント）のブースへお立ち寄りいただき、誠にありがとうございました。",
+      "",
+      "当日は、貴社の事業についてお話を伺うとともに、弊社の組立式スチールラックについてもご紹介させていただき、大変有意義な機会となりました。",
+      "",
+      "ご不明な点がございましたら、本メールにご返信ください。今後ともよろしくお願い申し上げます。",
+      "",
+      "改めまして、このたびの弊社ブースへのご来場に心より御礼申し上げます。今後とも何卒よろしくお願い申し上げます。",
+      "",
+      "{{서명}}",
+    ].join("\n"),
+  },
+  ko: {
+    subject: "[홈던트] {{전시회명}} 부스 방문 감사드립니다",
+    body: [
+      "{{회사명}}",
+      "",
+      "{{담당자}}님, 안녕하세요.",
+      "",
+      "평소 저희 홈던트에 관심 가져 주셔서 진심으로 감사드립니다.",
+      "",
+      "저는 홈던트(HOMEDANT) 해외영업부 {{보내는사람}}입니다.",
+      "",
+      "이번 {{전시회명}}({{기간}})에서 바쁘신 와중에도 저희 홈던트(HOMEDANT) 부스에 방문해 주셔서 진심으로 감사드립니다.",
+      "",
+      "당일 귀사의 사업에 대한 말씀을 나누고, 저희 조립식 스틸랙도 직접 소개해 드릴 수 있어 매우 뜻깊은 자리였습니다.",
+      "",
+      "궁금하신 점이 있으시면 언제든 본 메일로 회신 부탁드립니다. 앞으로 좋은 인연 이어가길 바랍니다.",
+      "",
+      "다시 한번 저희 부스에 방문해 주셔서 진심으로 감사드리며, 앞으로 좋은 인연 이어가길 바랍니다.",
+      "",
+      "{{서명}}",
+    ].join("\n"),
+  },
+};
+
+// 저장된 양식이 일부만 있거나 비어 있어도 기본값으로 안전하게 채워 줍니다.
+export function normalizeTemplates(raw: unknown): Templates {
+  const src = (raw ?? {}) as Partial<Record<Lang, Partial<Template>>>;
+  const pick = (l: Lang): Template => ({
+    subject: src[l]?.subject ?? DEFAULT_TEMPLATES[l].subject,
+    body: src[l]?.body ?? DEFAULT_TEMPLATES[l].body,
+  });
+  return { en: pick("en"), ja: pick("ja"), ko: pick("ko") };
+}
+
+// 치환 표시를 각 고객의 실제 값으로 바꿔, 최종 메일 제목·본문을 만듭니다.
+export function renderTemplate(
+  tpl: Template,
+  ex: FollowupExhibition,
+  c: Consultation,
+  lang: Lang,
+  opts: { signature?: Signature; companyIntro?: string } = {},
+): { subject: string; body: string } {
+  const nameFallback = lang === "ja" ? "ご担当者" : lang === "en" ? "Sir/Madam" : "담당자";
+  const map: Record<string, string> = {
+    "{{회사명}}": (c.company || "").trim(),
+    "{{담당자}}": (c.name || "").trim() || nameFallback,
+    "{{보내는사람}}": (opts.signature?.name || "").trim(),
+    "{{전시회명}}": ex.name || "",
+    "{{기간}}": formatRange(ex.startDate, ex.endDate, lang),
+    "{{회사소개}}": (opts.companyIntro || "").trim(),
+    "{{서명}}": formatSignature(opts.signature, lang),
+  };
+  const sub = (s: string) => {
+    let out = s || "";
+    for (const [k, v] of Object.entries(map)) out = out.split(k).join(v);
+    return out;
+  };
+  const cleanBody = (s: string) =>
+    s
+      .replace(/\(\s*\)/g, "") // 값이 비어 생긴 빈 괄호 () 제거
+      .replace(/（\s*）/g, "") // 전각 빈 괄호 （） 제거
+      .replace(/[ \t]+\n/g, "\n") // 줄 끝 공백 정리
+      .replace(/\n{3,}/g, "\n\n") // 빈 줄이 과하게 생기면 한 줄로
+      .trim();
+  return {
+    subject: sub(tpl.subject).replace(/\s*\n\s*/g, " ").trim(),
+    body: cleanBody(sub(tpl.body)),
+  };
 }

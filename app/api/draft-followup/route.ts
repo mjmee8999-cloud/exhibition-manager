@@ -27,94 +27,78 @@ export async function POST(request: Request) {
     );
   }
 
-  // 브라우저가 보낸 전시회·고객·언어·목적·서명 정보 꺼내기
-  let exhibition: Record<string, string> = {};
+  // 브라우저가 보낸 고객·언어·양식·상담내용 정보 꺼내기
+  //  (서명·회사소개는 이미 [양식] 본문 안에 치환되어 들어오므로 따로 받지 않습니다.)
   let customer: Record<string, string> = {};
   let lang = "en";
-  let purpose = "thanks";
-  let signature = "";
-  let attach = true;
-  let companyIntro = "";
+  let template: { subject: string; body: string } = { subject: "", body: "" };
+  let consultation: { interests: string; inquiries: string; memo: string } = {
+    interests: "",
+    inquiries: "",
+    memo: "",
+  };
   try {
     const body = await request.json();
-    exhibition = (body.exhibition ?? {}) as Record<string, string>;
     customer = (body.customer ?? {}) as Record<string, string>;
     lang = String(body.lang ?? "en");
-    purpose = String(body.purpose ?? "thanks");
-    signature = String(body.signature ?? "");
-    attach = body.attach !== false;
-    companyIntro = String(body.companyIntro ?? "");
+    if (body.template) {
+      template = {
+        subject: String(body.template.subject ?? ""),
+        body: String(body.template.body ?? ""),
+      };
+    }
+    if (body.consultation) {
+      consultation = {
+        interests: String(body.consultation.interests ?? ""),
+        inquiries: String(body.consultation.inquiries ?? ""),
+        memo: String(body.consultation.memo ?? ""),
+      };
+    }
   } catch {
     return Response.json({ error: "BAD_REQUEST", message: "요청을 읽을 수 없어요." }, { status: 400 });
   }
 
   const langName = LANG_NAME[lang] ?? LANG_NAME.en;
 
-  // 목적별 "마지막에 제안할 다음 행동"
-  const PURPOSE_GOAL: Record<string, string> = {
-    thanks:
-      "방문 감사와 관계 형성이 목적. 부담 없이 회신을 유도하고, 앞으로의 협업 기대를 담아 마무리한다.",
-    quote:
-      "맞춤 견적 제안이 목적. 고객의 관심 품목/문의를 근거로 견적을 준비하겠다고 제안하고, 원하는 품목·수량·사양을 알려달라고 정중히 요청한다.",
-    sample:
-      "샘플·카탈로그 발송이 목적. 제품 샘플과 최신 카탈로그를 보내주겠다고 제안하고, 받을 주소를 알려달라고 요청한다.",
-    meeting:
-      "온라인 미팅 성사가 목적. 짧은 온라인 미팅(화상 통화)을 정중히 제안하고, 편한 일정을 알려달라고 요청한다.",
-  };
-  const goal = PURPOSE_GOAL[purpose] ?? PURPOSE_GOAL.thanks;
-
   // 중요도 A(핵심 고객)면 조금 더 정성스럽고 적극적인 톤으로
   const importance = customer.importance || "";
   const warmth =
     importance === "A"
-      ? "이 고객은 핵심(중요도 A) 고객이다. 특별히 정성스럽고 적극적인 톤으로, 우선순위를 두고 대응한다는 인상을 준다."
-      : "정중하고 프로페셔널하되 과하지 않은 톤을 유지한다.";
+      ? "이 고객은 핵심(중요도 A) 고객이니, 기본 양식의 틀 안에서 조금 더 정성스럽고 따뜻한 어감으로 다듬는다."
+      : "";
+
+  // 상담 내용이 실제로 있는지 (없으면 양식을 거의 그대로 둠)
+  const hasConsult = [consultation.interests, consultation.inquiries, consultation.memo].some(
+    (v) => v && v.trim(),
+  );
 
   const prompt =
     `너는 홈던트(HOMEDANT)의 해외영업 담당자다. HOMEDANT는 한국의 조립식(무볼트) ` +
-    `선반·수납 전문 브랜드로, 스탠다드 선반, 이동식(바퀴) 선반, 행거 선반, 하단오픈형, ` +
-    `연결형, 서랍형, 코너형, 캐비닛형, 타공 선반, MAX 시리즈 등을 만든다. 강점은 손쉬운 무볼트 ` +
-    `조립, 다양한 사이즈·색상 선택, 견고한 내하중, 가정·상업·물류 등 폭넓은 활용, OEM/ODM 대응이다.\n\n` +
-    `아래 전시회에서 우리 부스를 방문한 고객에게 보낼 "팔로업 메일"을 ${langName}로 작성하라.\n\n` +
-    `[이 메일의 목적]\n${goal}\n\n` +
-    `[문체·품질 기준]\n` +
-    `- ${warmth}\n` +
-    `- 템플릿처럼 뻔하지 않게, 이 고객에게 실제로 쓰는 것처럼 자연스럽고 정중하게 쓴다.\n` +
-    `- **구체적인 관심 품목·문의 항목을 나열하거나 언급하지 마라.** (특정 제품명·문의 목록을 되뇌지 말 것.) ` +
-    `대신 "부스에서 나눈 이야기 감사드린다"는 정도로만 두루뭉술하게 언급하고, ` +
-    `"궁금하신 점이 있으면 무엇이든 편하게 문의해 달라"는 열린 마무리로 이어간다.\n` +
-    `- 없는 사실(가격·수치·납기·재고 등)은 절대 지어내지 않는다. 모르는 건 "안내드리겠다"로 표현한다.\n` +
-    `- ${langName} 외의 언어(특히 한국어)를 본문에 섞지 않는다. 전부 ${langName}로만 쓴다.\n\n` +
-    `[아주 중요 — 서식(줄바꿈) 규칙]\n` +
-    `- 문단과 문단 사이에는 반드시 "빈 줄 하나"(\\n\\n)를 넣는다. 문장을 다닥다닥 붙이지 말 것.\n` +
-    `- 한 문단은 1~3문장으로 짧게. 전체적으로 여백이 넉넉하고 읽기 편하게 배치한다.\n` +
-    `- 아래 순서·구조를 그대로 따른다(각 항목 사이 빈 줄):\n` +
-    `   1) 고객 회사명\n` +
-    `   2) 담당자 호칭 (예: Dear Mr. Kim, / 細川 啓太 様 / 홍길동님, 안녕하세요.)\n` +
-    `   3) 첫인사 (예: 平素より大変お世話になっております。 / Thank you for your continued support.)\n` +
-    `   4) 보내는 사람 자기소개 (아래 [서명]의 회사·직책·이름을 활용)\n` +
-    `   5) '${exhibition.name || "전시회"}에서 저희 HOMEDANT(홈던트) 부스를 방문해 주셔서 감사합니다' 취지의 감사 + 제품(조립식 스틸랙) 언급\n` +
-    `      ※ 전시회 이름은 아래 [전시회 정보]의 "이름"을 그대로 사용한다(이미 현지 표기로 넣어줬다). 임의로 바꾸지 말 것.\n` +
-    `   6) 부스에서 나눈 이야기에 대한 간단한 감사 (구체 품목·문의 나열 금지)\n` +
-    (companyIntro
-      ? `   6-1) 아래 [회사 소개]를 ${langName}로 자연스럽게 옮겨 한 문장으로 넣는다.\n`
-      : "") +
-    `   7) "궁금하신 점이 있으면 무엇이든 편하게 문의해 달라"는 열린 마무리\n` +
-    (attach ? `   8) 안내 자료(회사·제품 소개) 첨부 안내 한 줄\n` : "   8) (첨부 안내문은 넣지 않는다)\n") +
-    `   9) 마무리 인사 (다시 한번 감사 + 향후 관계 기대)\n` +
-    `   10) 맨 마지막에 아래 [서명] 블록을 "그대로" 붙인다(구분선 포함, 내용 바꾸지 말 것).\n\n` +
-    (companyIntro ? `[회사 소개]\n${companyIntro}\n\n` : "") +
-    `[고객 정보]\n` +
-    `회사명: ${customer.company || "-"}\n` +
-    `부서/직책: ${customer.title || "-"}\n` +
-    `담당자: ${customer.name || "-"}\n` +
-    `업체 특성: ${customer.companyTypeDetail || "-"}\n` +
-    `[전시회 정보]\n` +
-    `이름: ${exhibition.name || "-"}\n` +
-    `기간: ${exhibition.startDate || "-"} ~ ${exhibition.endDate || "-"}\n` +
-    `장소: ${exhibition.country || ""} ${exhibition.city || ""}\n\n` +
-    `[서명]\n${signature || "(비어 있음)"}\n\n` +
-    `제목(subject)과 본문(body)을 JSON으로만 답하라. 본문은 줄바꿈(\\n)을 포함한 완성된 메일 텍스트로, ${langName}로만 작성한다.`;
+    `선반·수납 전문 브랜드로, 조립식 스틸랙을 만든다.\n\n` +
+    `아래 [기본 양식]은 담당자가 직접 만들어 둔 팔로업 메일이다. ` +
+    `이 양식을 뼈대로 삼아, [상담 내용]에서 이 고객과 실제로 나눈 이야기를 자연스럽게 녹여 ` +
+    `조금 더 개인화한 메일을 ${langName}로 완성하라.\n\n` +
+    `[반드시 지킬 규칙]\n` +
+    `- 기본 양식의 구조·문장·어투·인사말을 최대한 그대로 유지한다. 통째로 새로 쓰지 마라.\n` +
+    `- 상담 내용에 실제로 있는 관심 품목·문의만, 부스에서 나눈 대화를 떠올리는 정도로 ` +
+    `1~2문장 자연스럽게 반영한다. 기계적으로 목록을 나열하지 마라.\n` +
+    (hasConsult
+      ? `- 반영할 위치는 "부스에서 나눈 이야기에 감사드린다"는 문단 근처가 가장 자연스럽다.\n`
+      : `- 이 고객은 상담 내용이 비어 있으니, 억지로 만들지 말고 기본 양식을 거의 그대로 둔다.\n`) +
+    `- 없는 사실(가격·수치·납기·재고 등)은 절대 지어내지 않는다.\n` +
+    `- 서명 블록(맨 아래 구분선 "----" 포함)은 한 글자도 바꾸지 말고 그대로 둔다.\n` +
+    `- 문단과 문단 사이에는 빈 줄 하나(\\n\\n)를 유지해 읽기 좋게 둔다.\n` +
+    `- 전부 ${langName}로만 쓴다. 다른 언어(특히 한국어)를 본문에 섞지 않는다.\n` +
+    (warmth ? `- ${warmth}\n` : "") +
+    `\n[기본 양식 - 제목]\n${template.subject || "(비어 있음)"}\n\n` +
+    `[기본 양식 - 본문]\n${template.body || "(비어 있음)"}\n\n` +
+    `[상담 내용]\n` +
+    `관심 품목: ${consultation.interests || "-"}\n` +
+    `문의 내용: ${consultation.inquiries || "-"}\n` +
+    `상담 메모: ${consultation.memo || "-"}\n` +
+    `업체 특성: ${customer.companyTypeDetail || "-"}\n\n` +
+    `제목(subject)과 본문(body)을 JSON으로만 답하라. ` +
+    `제목은 기본 양식의 제목을 거의 그대로 쓰고, 본문은 줄바꿈(\\n)을 포함한 완성된 메일 텍스트로 ${langName}로만 작성한다.`;
 
   try {
     const res = await fetch(

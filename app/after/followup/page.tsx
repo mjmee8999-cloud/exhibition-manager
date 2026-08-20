@@ -12,20 +12,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useExhibitions } from "@/components/ExhibitionProvider";
 import { GradeBadge } from "@/components/formControls";
-import { consultationDate, type Consultation } from "@/lib/consultation";
+import { consultationDate, joinList, type Consultation } from "@/lib/consultation";
 import { listConsultations } from "@/lib/consultationStore";
 import {
-  buildTemplate,
   DEFAULT_OPTIONS,
+  DEFAULT_TEMPLATES,
   EMPTY_SIGNATURE,
   formatSignature,
   LANGS,
+  normalizeTemplates,
+  parseEmails,
   pickLang,
+  renderTemplate,
+  TEMPLATE_TOKENS,
   type FollowupExhibition,
   type FollowupOptions,
   type Lang,
-  type Purpose,
   type Signature,
+  type Templates,
 } from "@/lib/followup";
 
 // 중요도 순서(A가 위로)로 정렬하기 위한 가중치
@@ -34,6 +38,7 @@ const IMP_ORDER: Record<string, number> = { A: 0, B: 1, C: 2, "": 3 };
 // 내 서명·양식 옵션은 전시회와 무관한 "내 정보"라 앱 전체 공용으로 저장해요.
 const SIG_KEY = "followup_signature";
 const OPT_KEY = "followup_options";
+const TPL_KEY = "followup_templates";
 
 export default function FollowupPage() {
   const { selected } = useExhibitions();
@@ -52,6 +57,14 @@ export default function FollowupPage() {
   // 양식 옵션 (첨부 안내 · 회사 소개 · 참조)
   const [options, setOptions] = useState<FollowupOptions>(DEFAULT_OPTIONS);
   const [copiedCc, setCopiedCc] = useState(false);
+  // 참조(CC)로 실제 들어갈 회사원 이메일 목록 (입력을 정리한 결과)
+  const ccList = useMemo(() => parseEmails(options.cc), [options.cc]);
+
+  // 사용자 지정 양식 (언어별 제목·본문) — 편집기에서 만든 나만의 양식
+  const [templates, setTemplates] = useState<Templates>(DEFAULT_TEMPLATES);
+  const [tplLang, setTplLang] = useState<Lang>("ja"); // 편집기에서 지금 보고 있는 언어
+  const [applyTick, setApplyTick] = useState(0); // "양식 반영"을 누른 횟수 — 바뀌면 카드들이 다시 채워짐
+  const [applied, setApplied] = useState(false); // "반영됨" 표시용
 
   // 전체 생성 진행 상태
   const [batch, setBatch] = useState({ running: false, done: 0, total: 0 });
@@ -130,10 +143,56 @@ export default function FollowupPage() {
     });
   };
 
-  async function copyCc() {
-    if (!options.cc.trim()) return;
+  // 사용자 지정 양식 불러오기 (앱 공용)
+  useEffect(() => {
     try {
-      await navigator.clipboard.writeText(options.cc.trim());
+      const raw = localStorage.getItem(TPL_KEY);
+      if (raw) setTemplates(normalizeTemplates(JSON.parse(raw)));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // 편집기에서 지금 언어의 제목/본문을 수정 → 상태 + 브라우저에 저장 (아직 메일엔 적용 안 함)
+  const updateTemplate = (patch: Partial<{ subject: string; body: string }>) => {
+    setTemplates((prev) => {
+      const next = { ...prev, [tplLang]: { ...prev[tplLang], ...patch } };
+      try {
+        localStorage.setItem(TPL_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+    setApplied(false);
+  };
+
+  // 지금 언어의 양식을 "기본값"으로 되돌립니다.
+  const resetTemplate = () => {
+    setTemplates((prev) => {
+      const next = { ...prev, [tplLang]: { ...DEFAULT_TEMPLATES[tplLang] } };
+      try {
+        localStorage.setItem(TPL_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+    setApplied(false);
+  };
+
+  // "양식 반영" — 편집한 양식을 아래 메일 카드들에 실제로 적용합니다. (기존 내용은 덮어씀)
+  const applyTemplates = () => {
+    setApplyTick((n) => n + 1);
+    setApplied(true);
+    setTimeout(() => setApplied(false), 2500);
+  };
+
+  async function copyCc() {
+    if (!ccList.length) return;
+    try {
+      // 그룹웨어 "참조"란은 세미콜론 구분을 많이 쓰므로 "; "로 이어 붙여 복사합니다.
+      await navigator.clipboard.writeText(ccList.join("; "));
       setCopiedCc(true);
       setTimeout(() => setCopiedCc(false), 1500);
     } catch {
@@ -370,30 +429,129 @@ export default function FollowupPage() {
                 />
               </div>
 
-              {/* 참조(CC) 이메일 */}
+              {/* 참조(CC) 이메일 — 회사원 여러 명을 항상 참조로 */}
               <div>
                 <div className="mb-1 text-sm font-semibold">참조(CC) 이메일 (선택)</div>
                 <p className="mb-2 text-xs text-zinc-500">
-                  항상 참조로 넣을 주소. 그룹웨어 &ldquo;참조&rdquo;란에 붙여넣으세요.
+                  모든 팔로우업 메일에 <b>항상 참조로 넣을 회사원 주소</b>를 적어두세요.
+                  「✉ 메일 보내기」를 누르면 아웃룩 <b>참조(CC)</b>란에 자동으로 들어가요.
+                  여러 명은 <b>쉼표·줄바꿈</b> 등 아무렇게나 구분해도 됩니다.
                 </p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={options.cc}
-                    onChange={(e) => updateOptions({ cc: e.target.value })}
-                    placeholder="예: overseas@homedant.com"
-                    className="flex-1 rounded-xl border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-zinc-900"
-                  />
+                <textarea
+                  value={options.cc}
+                  onChange={(e) => updateOptions({ cc: e.target.value })}
+                  rows={3}
+                  placeholder={"예:\noverseas@homedant.com\nkim@homedant.com, lee@homedant.com"}
+                  className="w-full resize-y rounded-xl border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-zinc-900"
+                />
+                <div className="mt-1.5 flex items-center gap-2">
+                  {ccList.length > 0 && (
+                    <span className="text-xs text-zinc-500">참조 {ccList.length}명: {ccList.join(", ")}</span>
+                  )}
                   <button
                     type="button"
                     onClick={copyCc}
-                    disabled={!options.cc.trim()}
-                    className="shrink-0 rounded-xl border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/[0.05] disabled:opacity-40 dark:border-white/15 dark:hover:bg-white/[0.06]"
+                    disabled={ccList.length === 0}
+                    className="ml-auto shrink-0 rounded-xl border border-black/15 px-4 py-1.5 text-sm font-medium hover:bg-black/[0.05] disabled:opacity-40 dark:border-white/15 dark:hover:bg-white/[0.06]"
                   >
                     {copiedCc ? "✓ 복사됨" : "참조 복사"}
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* ── 메일 양식 직접 편집 ── */}
+            <div className="space-y-3 border-t border-black/10 pt-4 dark:border-white/10">
+              <div>
+                <div className="text-sm font-semibold">메일 양식 직접 편집</div>
+                <p className="mt-1 text-xs text-zinc-500">
+                  원하는 문구로 양식을 직접 만들 수 있어요. 아래 <b>치환 표시</b>를 넣어두면 메일마다 실제 값으로 자동으로 바뀝니다.
+                  다 고쳤으면 맨 아래 <b>「✅ 양식 반영」</b>을 눌러 아래 메일들에 적용하세요. (이 브라우저에 저장돼요)
+                </p>
+              </div>
+
+              {/* 언어 선택 (언어별로 따로 저장) */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500">언어</span>
+                <div className="flex gap-1">
+                  {LANGS.map((l) => (
+                    <button
+                      key={l.value}
+                      type="button"
+                      onClick={() => setTplLang(l.value)}
+                      className={
+                        "rounded-lg px-3 py-1 text-sm font-medium transition-colors " +
+                        (tplLang === l.value
+                          ? "bg-blue-600 text-white"
+                          : "border border-black/15 hover:bg-black/[0.05] dark:border-white/15 dark:hover:bg-white/[0.06]")
+                      }
+                    >
+                      {l.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 치환 표시 안내 */}
+              <div className="rounded-xl bg-black/[0.03] p-3 dark:bg-white/[0.05]">
+                <div className="mb-1.5 text-xs font-semibold text-zinc-500">넣을 수 있는 치환 표시 (복사해서 붙여넣으세요)</div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  {TEMPLATE_TOKENS.map((t) => (
+                    <span key={t.token} className="text-xs text-zinc-600 dark:text-zinc-300">
+                      <code className="rounded bg-black/[0.06] px-1 py-0.5 font-mono dark:bg-white/[0.1]">{t.token}</code>
+                      <span className="ml-1 text-zinc-400">{t.label}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* 제목 */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-500">제목</label>
+                <input
+                  type="text"
+                  value={templates[tplLang].subject}
+                  onChange={(e) => updateTemplate({ subject: e.target.value })}
+                  className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-zinc-900"
+                />
+              </div>
+
+              {/* 본문 */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-500">본문</label>
+                <textarea
+                  value={templates[tplLang].body}
+                  onChange={(e) => updateTemplate({ body: e.target.value })}
+                  rows={16}
+                  className="w-full resize-y rounded-xl border border-black/15 bg-white px-3 py-3 text-sm leading-relaxed dark:border-white/15 dark:bg-zinc-900"
+                />
+              </div>
+
+              {/* 되돌리기 + 반영 */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={resetTemplate}
+                  className="rounded-xl border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/[0.05] dark:border-white/15 dark:hover:bg-white/[0.06]"
+                >
+                  이 언어 기본값으로 되돌리기
+                </button>
+                <button
+                  type="button"
+                  onClick={applyTemplates}
+                  className="ml-auto rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                >
+                  ✅ 양식 반영 (아래 메일에 적용)
+                </button>
+              </div>
+              {applied && (
+                <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                  아래 메일들에 양식을 적용했어요. (직접 수정했거나 AI로 만든 내용은 덮어써져요)
+                </p>
+              )}
+              <p className="text-xs text-zinc-400">
+                ※ 「양식 반영」은 아래 <b>모든</b> 메일을 이 양식으로 다시 채웁니다. AI 초안은 이 양식을 뼈대로 상담 내용을 더해 줘요.
+              </p>
             </div>
           </div>
         )}
@@ -473,6 +631,8 @@ export default function FollowupPage() {
                   c={c}
                   signature={signature}
                   options={options}
+                  templates={templates}
+                  applyTick={applyTick}
                   register={register}
                   unregister={unregister}
                 />
@@ -519,6 +679,8 @@ function FollowupCard({
   c,
   signature,
   options,
+  templates,
+  applyTick,
   register,
   unregister,
 }: {
@@ -526,17 +688,18 @@ function FollowupCard({
   c: Consultation;
   signature: Signature;
   options: FollowupOptions;
+  templates: Templates;
+  applyTick: number;
   register: (id: string, fn: () => Promise<void>) => void;
   unregister: (id: string) => void;
 }) {
   const [lang, setLang] = useState<Lang>(() => pickLang(ex.country));
-  const purpose: Purpose = "thanks"; // 목적 선택은 제거 → 감사 인사 기본
+  // 참조(CC)로 넣을 회사원 이메일 목록 (설정칸 입력을 정리한 결과)
+  const ccList = useMemo(() => parseEmails(options.cc), [options.cc]);
   const initial = useMemo(
     () =>
-      buildTemplate(ex, c, pickLang(ex.country), {
-        purpose,
+      renderTemplate(templates[pickLang(ex.country)], ex, c, pickLang(ex.country), {
         signature,
-        attach: options.attach,
         companyIntro: options.companyIntro,
       }),
     // 최초 1회만 사용 (이후는 아래 핸들러/effect가 관리)
@@ -550,19 +713,17 @@ function FollowupCard({
   const [aiMsg, setAiMsg] = useState("");
   const [copied, setCopied] = useState<"" | "body">("");
 
-  // 현재 언어·서명·옵션으로 고정 양식을 다시 채움
+  // 현재 언어·서명·옵션으로 "내 양식"을 다시 채움
   const rebuild = useCallback(
     (l: Lang) => {
-      const t = buildTemplate(ex, c, l, {
-        purpose,
+      const t = renderTemplate(templates[l], ex, c, l, {
         signature,
-        attach: options.attach,
         companyIntro: options.companyIntro,
       });
       setSubject(t.subject);
       setBody(t.body);
     },
-    [ex, c, signature, options.attach, options.companyIntro],
+    [ex, c, templates, signature, options.companyIntro],
   );
 
   function changeLang(next: Lang) {
@@ -572,7 +733,7 @@ function FollowupCard({
     rebuild(next);
   }
 
-  // 서명·옵션이 바뀌면(설정 저장) 양식을 다시 채움 — 단, AI 초안을 보고 있으면 보존
+  // 서명·회사소개가 바뀌면(설정 저장) 양식을 다시 채움 — 단, AI 초안을 보고 있으면 보존
   const firstSig = useRef(true);
   useEffect(() => {
     if (firstSig.current) {
@@ -582,13 +743,31 @@ function FollowupCard({
     if (aiStatus === "ok") return;
     rebuild(lang);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature, options.attach, options.companyIntro]);
+  }, [signature, options.companyIntro]);
 
-  // AI 맞춤 초안 생성
+  // "양식 반영"을 누르면 → 편집한 양식으로 이 메일을 다시 채움 (직접 수정·AI 내용도 덮어씀)
+  const firstApply = useRef(true);
+  useEffect(() => {
+    if (firstApply.current) {
+      firstApply.current = false;
+      return;
+    }
+    setAiStatus("idle");
+    setAiMsg("");
+    rebuild(lang);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyTick]);
+
+  // AI 맞춤 초안 생성 — "내 양식"을 뼈대로, 상담 일지 내용을 자연스럽게 더해 줍니다.
   const makeAiDraft = useCallback(async () => {
     setAiStatus("loading");
     setAiMsg("");
     try {
+      // 이 고객 값으로 채운 "내 양식" (치환 표시가 실제 값으로 바뀐 상태)
+      const filled = renderTemplate(templates[lang], ex, c, lang, {
+        signature,
+        companyIntro: options.companyIntro,
+      });
       const res = await fetch("/api/draft-followup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -602,9 +781,15 @@ function FollowupCard({
             importance: c.importance,
           },
           lang,
-          purpose,
+          // 내가 만든 양식 (AI는 이 뼈대·어투를 유지해야 함)
+          template: { subject: filled.subject, body: filled.body },
+          // 상담 일지 내용 (AI가 자연스럽게 반영할 재료)
+          consultation: {
+            interests: joinList(c.interests, c.interestEtc),
+            inquiries: joinList(c.inquiries, c.inquiryEtc),
+            memo: c.memo || "",
+          },
           signature: formatSignature(signature, lang),
-          attach: options.attach,
           companyIntro: options.companyIntro,
         }),
       });
@@ -623,7 +808,7 @@ function FollowupCard({
       setAiStatus("error");
       setAiMsg("AI 서버에 연결하지 못했어요. 아래 양식을 그대로 쓰세요.");
     }
-  }, [ex, c, lang, purpose, signature, options.attach, options.companyIntro]);
+  }, [ex, c, lang, templates, signature, options.companyIntro]);
 
   // 전체 생성에서 이 카드를 호출할 수 있도록 등록 (항상 최신 makeAiDraft 실행)
   const genRef = useRef(makeAiDraft);
@@ -649,11 +834,12 @@ function FollowupCard({
   const mailtoHref = useMemo(() => {
     const enc = (s: string) => encodeURIComponent(s.replace(/\r?\n/g, "\r\n"));
     const params: string[] = [];
-    if (options.cc.trim()) params.push(`cc=${enc(options.cc.trim())}`);
+    // 회사원 여러 명을 어떻게 구분해 넣든 정리해서 참조(CC)에 넣습니다. (쉼표 구분 = mailto 표준)
+    if (ccList.length) params.push(`cc=${enc(ccList.join(","))}`);
     params.push(`subject=${enc(subject)}`);
     params.push(`body=${enc(body)}`);
     return `mailto:${c.email.trim()}?${params.join("&")}`;
-  }, [c.email, options.cc, subject, body]);
+  }, [c.email, ccList, subject, body]);
 
   return (
     <section className="rounded-2xl border border-black/10 p-5 dark:border-white/10">
