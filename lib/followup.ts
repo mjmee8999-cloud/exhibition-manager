@@ -389,6 +389,55 @@ export const DEFAULT_TEMPLATES: Templates = {
   },
 };
 
+// ────────────────────────────────────────────────────────────────
+//  저장한 양식 보관함 (이름 붙여 여러 개 저장 → 나중에 골라 불러오기)
+//  - 언어별로 각각 저장합니다. (일본어 양식들 / 영어 양식들 따로)
+//  - 이 브라우저(localStorage)에 보관돼요.
+// ────────────────────────────────────────────────────────────────
+
+// 보관함에 저장된 양식 한 개
+export type SavedTemplate = {
+  id: string;
+  name: string; // 내가 붙인 이름 (예: "전시회 감사 인사")
+  lang: Lang; // 어떤 언어의 양식인지
+  subject: string;
+  body: string;
+  savedAt: number; // 저장 시각(밀리초) — 최신 순 정렬용
+};
+
+// 새 저장 항목에 쓸 고유 id 를 만듭니다. (브라우저 crypto 우선, 없으면 시각+난수)
+export function newTemplateId(): string {
+  try {
+    const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+    if (c?.randomUUID) return c.randomUUID();
+  } catch {
+    /* ignore */
+  }
+  return `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// localStorage 에서 읽은 값을 안전하게 SavedTemplate[] 로 정리합니다.
+//  - 배열이 아니거나 필드가 빠진 항목은 걸러내고, 최신 저장 순으로 정렬해요.
+export function normalizeSavedTemplates(raw: unknown): SavedTemplate[] {
+  if (!Array.isArray(raw)) return [];
+  const langs = new Set<Lang>(["en", "ja", "ko"]);
+  const out: SavedTemplate[] = [];
+  for (const item of raw) {
+    const o = (item ?? {}) as Partial<SavedTemplate>;
+    if (typeof o.subject !== "string" && typeof o.body !== "string") continue;
+    const lang = (langs.has(o.lang as Lang) ? o.lang : "ja") as Lang;
+    out.push({
+      id: typeof o.id === "string" && o.id ? o.id : newTemplateId(),
+      name: (typeof o.name === "string" ? o.name : "").trim() || "이름 없는 양식",
+      lang,
+      subject: typeof o.subject === "string" ? o.subject : "",
+      body: typeof o.body === "string" ? o.body : "",
+      savedAt: typeof o.savedAt === "number" ? o.savedAt : 0,
+    });
+  }
+  return out.sort((a, b) => b.savedAt - a.savedAt);
+}
+
 // 저장된 양식이 일부만 있거나 비어 있어도 기본값으로 안전하게 채워 줍니다.
 export function normalizeTemplates(raw: unknown): Templates {
   const src = (raw ?? {}) as Partial<Record<Lang, Partial<Template>>>;

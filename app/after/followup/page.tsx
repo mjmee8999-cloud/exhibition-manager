@@ -20,6 +20,8 @@ import {
   EMPTY_SIGNATURE,
   formatSignature,
   LANGS,
+  newTemplateId,
+  normalizeSavedTemplates,
   normalizeTemplates,
   parseEmails,
   pickLang,
@@ -28,6 +30,7 @@ import {
   type FollowupExhibition,
   type FollowupOptions,
   type Lang,
+  type SavedTemplate,
   type Signature,
   type Templates,
 } from "@/lib/followup";
@@ -39,6 +42,7 @@ const IMP_ORDER: Record<string, number> = { A: 0, B: 1, C: 2, "": 3 };
 const SIG_KEY = "followup_signature";
 const OPT_KEY = "followup_options";
 const TPL_KEY = "followup_templates";
+const SAVED_TPL_KEY = "followup_saved_templates"; // 이름 붙여 보관한 양식 목록
 
 export default function FollowupPage() {
   const { selected } = useExhibitions();
@@ -65,6 +69,11 @@ export default function FollowupPage() {
   const [tplLang, setTplLang] = useState<Lang>("ja"); // 편집기에서 지금 보고 있는 언어
   const [applyTick, setApplyTick] = useState(0); // "양식 반영"을 누른 횟수 — 바뀌면 카드들이 다시 채워짐
   const [applied, setApplied] = useState(false); // "반영됨" 표시용
+
+  // 이름 붙여 보관한 양식들 (언어별) + 저장할 때 입력하는 이름
+  const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
+  const [saveName, setSaveName] = useState("");
+  const [savedFlash, setSavedFlash] = useState(""); // "저장했어요"/"불러왔어요" 같은 안내
 
   // 전체 생성 진행 상태
   const [batch, setBatch] = useState({ running: false, done: 0, total: 0 });
@@ -152,6 +161,89 @@ export default function FollowupPage() {
       /* ignore */
     }
   }, []);
+
+  // 보관함(이름 붙여 저장한 양식) 불러오기
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SAVED_TPL_KEY);
+      if (raw) setSavedTemplates(normalizeSavedTemplates(JSON.parse(raw)));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // 보관함을 상태 + 브라우저에 함께 저장하는 공통 함수
+  const persistSaved = (next: SavedTemplate[]) => {
+    setSavedTemplates(next);
+    try {
+      localStorage.setItem(SAVED_TPL_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // 잠깐 떴다 사라지는 안내 문구
+  const flash = (msg: string) => {
+    setSavedFlash(msg);
+    setTimeout(() => setSavedFlash(""), 2200);
+  };
+
+  // 지금 편집 중인(현재 언어) 양식을 이름 붙여 보관함에 저장
+  const saveCurrentTemplate = () => {
+    const name = saveName.trim();
+    if (!name) {
+      flash("먼저 양식 이름을 적어주세요.");
+      return;
+    }
+    const cur = templates[tplLang];
+    const langLabel = LANGS.find((l) => l.value === tplLang)?.label ?? tplLang;
+    // 같은 언어에 같은 이름이 이미 있으면 그 항목을 덮어써요. (없으면 새로 추가)
+    const existing = savedTemplates.find((s) => s.lang === tplLang && s.name === name);
+    if (existing) {
+      const next = savedTemplates.map((s) =>
+        s.id === existing.id
+          ? { ...s, subject: cur.subject, body: cur.body, savedAt: Date.now() }
+          : s,
+      );
+      persistSaved(next);
+      flash(`「${name}」 양식을 덮어썼어요. (${langLabel})`);
+    } else {
+      const item: SavedTemplate = {
+        id: newTemplateId(),
+        name,
+        lang: tplLang,
+        subject: cur.subject,
+        body: cur.body,
+        savedAt: Date.now(),
+      };
+      persistSaved([item, ...savedTemplates]);
+      flash(`「${name}」 양식을 저장했어요. (${langLabel})`);
+    }
+    setSaveName("");
+  };
+
+  // 보관함의 양식을 편집기로 불러오기 (현재 언어 편집칸에 채움 — 메일 적용은 「양식 반영」)
+  const loadSavedTemplate = (item: SavedTemplate) => {
+    setTplLang(item.lang);
+    setTemplates((prev) => {
+      const next = { ...prev, [item.lang]: { subject: item.subject, body: item.body } };
+      try {
+        localStorage.setItem(TPL_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+    setApplied(false);
+    setSaveName(item.name);
+    flash(`「${item.name}」 양식을 편집기로 불러왔어요. 아래 「양식 반영」을 눌러 메일에 적용하세요.`);
+  };
+
+  // 보관함에서 양식 삭제
+  const deleteSavedTemplate = (item: SavedTemplate) => {
+    persistSaved(savedTemplates.filter((s) => s.id !== item.id));
+    flash(`「${item.name}」 양식을 삭제했어요.`);
+  };
 
   // 편집기에서 지금 언어의 제목/본문을 수정 → 상태 + 브라우저에 저장 (아직 메일엔 적용 안 함)
   const updateTemplate = (patch: Partial<{ subject: string; body: string }>) => {
@@ -310,6 +402,8 @@ export default function FollowupPage() {
   }
 
   const sigPreview = formatSignature(signature, "ko");
+  // 지금 편집 중인 언어의 저장된 양식만 (보관함 목록에 표시)
+  const savedForLang = savedTemplates.filter((s) => s.lang === tplLang);
 
   return (
     <main className="w-full px-8 py-8">
@@ -503,6 +597,82 @@ export default function FollowupPage() {
                     </span>
                   ))}
                 </div>
+              </div>
+
+              {/* ── 양식 보관함 (이름 붙여 저장 · 불러오기) ── */}
+              <div className="rounded-xl border border-black/10 bg-black/[0.015] p-3 dark:border-white/10 dark:bg-white/[0.03]">
+                <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                  📁 양식 보관함{" "}
+                  <span className="font-normal text-zinc-400">
+                    ({LANGS.find((l) => l.value === tplLang)?.label} · {savedForLang.length}개)
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-zinc-500">
+                  아래 편집한 양식을 <b>이름 붙여 저장</b>해두고, 나중에 <b>불러오기</b>로 골라 쓸 수 있어요.
+                  (언어별로 따로 보관 · 이 브라우저에 저장)
+                </p>
+
+                {/* 저장 줄 */}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={saveName}
+                    onChange={(e) => setSaveName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        saveCurrentTemplate();
+                      }
+                    }}
+                    placeholder="양식 이름 (예: 전시회 감사 인사)"
+                    className="min-w-0 flex-1 rounded-lg border border-black/15 bg-white px-3 py-1.5 text-sm dark:border-white/15 dark:bg-zinc-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={saveCurrentTemplate}
+                    className="shrink-0 rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+                  >
+                    💾 현재 양식 저장
+                  </button>
+                </div>
+
+                {savedFlash && (
+                  <p className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">{savedFlash}</p>
+                )}
+
+                {/* 저장된 목록 */}
+                {savedForLang.length === 0 ? (
+                  <p className="mt-2 text-xs text-zinc-400">
+                    아직 저장된 {LANGS.find((l) => l.value === tplLang)?.label} 양식이 없어요.
+                  </p>
+                ) : (
+                  <ul className="mt-2 space-y-1.5">
+                    {savedForLang.map((s) => (
+                      <li
+                        key={s.id}
+                        className="flex items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-1.5 dark:border-white/10 dark:bg-zinc-900"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium" title={s.subject}>
+                          {s.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => loadSavedTemplate(s)}
+                          className="shrink-0 rounded-lg border border-blue-600 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/40"
+                        >
+                          불러오기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteSavedTemplate(s)}
+                          className="shrink-0 rounded-lg border border-black/15 px-2.5 py-1 text-xs font-medium text-zinc-500 hover:bg-red-50 hover:text-red-600 dark:border-white/15 dark:hover:bg-red-950/40"
+                        >
+                          삭제
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {/* 제목 */}
